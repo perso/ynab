@@ -5,6 +5,9 @@ from unittest.mock import patch
 
 from ynab.main import convert_bank_transactions, fetch_transactions
 
+_ENV_CONVERT = {"YNAB_ACCOUNTNO_BUDGET_MAP": '{"FI111": "Budget"}'}
+_ENV_FETCH = {"YNAB_BUDGET_ID": "test-budget-id"}
+
 
 class TestConvertBankTransactions(unittest.TestCase):
     def _write_input_csv(self, path: str, rows: list[str]) -> None:
@@ -13,6 +16,7 @@ class TestConvertBankTransactions(unittest.TestCase):
         with open(path, "wb") as f:
             f.write(content.encode("iso-8859-1"))
 
+    @patch.dict(os.environ, _ENV_CONVERT)
     def test_filters_pending_transactions(self):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
@@ -36,6 +40,7 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
+    @patch.dict(os.environ, _ENV_CONVERT)
     def test_deduplicates_and_sorts_by_date(self):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
@@ -61,6 +66,7 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
+    @patch.dict(os.environ, _ENV_CONVERT)
     def test_empty_input_writes_only_header(self):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
@@ -79,6 +85,7 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
+    @patch.dict(os.environ, _ENV_CONVERT)
     def test_no_file_paths_does_nothing(self):
         with patch("ynab.main.form_file_paths", return_value=[]):
             convert_bank_transactions()
@@ -93,6 +100,7 @@ class TestRunApp(unittest.TestCase):
 
 
 class TestFetchTransactions(unittest.TestCase):
+    @patch.dict(os.environ, _ENV_FETCH)
     @patch("ynab.main.YnabApiClient.get_transactions")
     @patch("ynab.main.read_credentials_file")
     def test_calls_api_with_credentials(self, mock_credentials, mock_get_transactions):
@@ -102,6 +110,7 @@ class TestFetchTransactions(unittest.TestCase):
         mock_credentials.assert_called_once()
         mock_get_transactions.assert_called_once()
 
+    @patch.dict(os.environ, _ENV_FETCH)
     @patch("ynab.main.YnabApiClient.get_transactions")
     @patch("ynab.main.read_credentials_file")
     def test_logs_each_transaction(self, mock_credentials, mock_get_transactions):

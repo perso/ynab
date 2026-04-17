@@ -9,6 +9,7 @@ packages = [{include = "ynab"}]
 [tool.poetry.dependencies]
 python = ">=3.10"
 requests = "*"
+python-dotenv = "^1.2.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

@@ -10,13 +10,13 @@ Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish 
    poetry install
    ```
 
-2. Place bank export CSVs in `data/input/`. Filenames must follow the format `<account_no>_<anything>.csv`, e.g. `FI5380002631119863_2024.01.01-2024.01.31.csv`.
+2. Place bank export CSVs in `data/input/`. Filenames must follow the format `<account_no>_<anything>.csv`.
 
 3. Edit the account → budget mapping in `ynab/main.py`:
    ```python
    _ACCOUNTNO_BUDGET_MAP = {
-       "FI5380002631119863": "MyAccount",
-       "FI7880207710867395": "MasterCard",
+       "111222_ABC": "AccountNameOne",
+       "333444_DEF": "AccountNameTwo",
    }
    ```
 
