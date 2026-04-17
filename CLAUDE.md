@@ -28,7 +28,7 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 After making ANY code changes, always:
 1. Run `pytest tests/` and fix all failures before stopping
 2. Run `ruff check .` and fix all warnings
-3. Run `mypy src/` and fix type errors
+3. Run `mypy ynab/` and fix type errors
 4. Only tell me you're done after all three pass cleanly
 
 Never present code as finished if tests are failing.
@@ -36,11 +36,14 @@ If you cannot fix a failure, stop and explain the problem
 to me instead of leaving broken code.
 
 ## How to run this project
-- Install deps: `pip install -e ".[dev]"`
+- Install deps: `poetry install`
+- Activate venv: `source .venv/bin/activate`
 - Run tests: `pytest tests/`
 - Run single test: `pytest tests/test_filename.py::test_name`
-- Lint: `ruff check .`
-- Type check: `mypy src/`
+- Run tests with coverage: `pytest tests/ --cov=ynab --cov-report=term-missing`
+- Lint check: `ruff check .`
+- Lint fix: `ruff check --fix .`
+- Type check: `mypy ynab/`
 
 ## Critical file rules
 
@@ -50,3 +53,33 @@ It is read-only. You may only read from it.
 
 All output must go to `data/output/` only.
 If you are ever unsure which directory to write to, ask me first.
+
+## Python environment
+
+Dependencies are managed with Poetry. The virtual environment is at `.venv/`.
+
+Activate it before running commands:
+```bash
+source .venv/bin/activate
+```
+
+Or prefix individual commands with `poetry run`:
+```bash
+poetry run pytest tests/
+poetry run mypy ynab/
+```
+
+Never use bare `python`, `pytest`, `pip`, or `ruff` commands —
+they may point to the wrong environment.
+
+## Dependency management
+
+If a module or package is missing, do NOT install it automatically.
+Stop and tell me exactly what command you would run, then wait
+for my approval before running it.
+
+When I approve, add dependencies using Poetry:
+- Runtime dep: `poetry add <package>`
+- Dev dep: `poetry add --group dev <package>`
+
+Never use pip to install project dependencies.

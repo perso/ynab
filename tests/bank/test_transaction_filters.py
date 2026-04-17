@@ -17,3 +17,6 @@ class TestTransactionFilters(unittest.TestCase):
         unchecked = filter_unchecked_transactions(self.transactions)
         expected = [BankTransaction(date(2023, 4, 20), '', '', '', 1.0, None, TransactionStatus.CLEARED)]
         self.assertEqual(expected, unchecked)
+
+    def test_filter_unchecked_transactions_empty_list(self):
+        self.assertEqual([], filter_unchecked_transactions([]))

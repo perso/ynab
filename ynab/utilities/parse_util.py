@@ -25,6 +25,25 @@ def parse_date(date_string: str) -> date:
         raise ValueError("Invalid date format. Must be in the format 'dd.mm.yyyy'.")
 
 
+def parse_required_amount(float_string: str) -> float:
+    """Parse a required Finnish bank amount string into a float.
+
+    Args:
+        float_string: Amount with comma decimal separator and optional spaces.
+
+    Returns:
+        Parsed amount.
+
+    Raises:
+        ValueError: If the string is empty or cannot be parsed.
+    """
+    if float_string == "":
+        raise ValueError("Amount field must not be empty.")
+    result = parse_amount_sign_leading(float_string)
+    assert result is not None
+    return result
+
+
 def parse_amount_sign_leading(float_string: str) -> Optional[float]:
     """Parse a Finnish bank amount string into a float.
 

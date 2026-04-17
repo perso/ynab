@@ -27,3 +27,15 @@ class TestConfigUtil(unittest.TestCase):
             read_credentials_file("path/does/not/exist")
 
         os.remove(temp_file_path)
+
+    def test_read_credentials_file_preserves_whitespace(self):
+        contents = "token_with_trailing_newline\n"
+
+        with NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_file.write(contents)
+            temp_file_path = temp_file.name
+
+        result = read_credentials_file(temp_file_path)
+        self.assertEqual(result, contents)
+
+        os.remove(temp_file_path)

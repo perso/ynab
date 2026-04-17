@@ -4,9 +4,10 @@ Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish 
 
 ## Quick start
 
-1. Install in editable mode:
+1. Install dependencies:
    ```bash
-   pip install -e .
+   source .venv/bin/activate
+   poetry install
    ```
 
 2. Place bank export CSVs in `data/input/`. Filenames must follow the format `<account_no>_<anything>.csv`, e.g. `FI5380002631119863_2024.01.01-2024.01.31.csv`.
@@ -44,5 +45,25 @@ Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish 
 ## Running tests
 
 ```bash
-pytest
+pytest tests/
+```
+
+With coverage report:
+
+```bash
+pytest tests/ --cov=ynab --cov-report=term-missing
+```
+
+## Linting
+
+Check for issues:
+
+```bash
+ruff check .
+```
+
+Fix auto-fixable issues:
+
+```bash
+ruff check --fix .
 ```

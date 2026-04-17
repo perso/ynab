@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Union
 
 from ynab.bank.transaction import BankTransaction, TransactionStatus
-from ynab.utilities.parse_util import parse_date, parse_amount_sign_leading
+from ynab.utilities.parse_util import parse_date, parse_amount_sign_leading, parse_required_amount
 
 _ENCODING = "iso-8859-1"
 _DELIMITER = ";"
@@ -41,7 +41,7 @@ class TransactionReader:
                         category=row[1].strip(),
                         sub_category=row[2].strip(),
                         payee=row[3].strip(),
-                        amount=parse_amount_sign_leading(row[4]),
+                        amount=parse_required_amount(row[4]),
                         balance=parse_amount_sign_leading(row[5]),
                         status=self._resolve_status(row[6], row[7]),
                     )

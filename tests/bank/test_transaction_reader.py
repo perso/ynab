@@ -35,3 +35,57 @@ class TestTransactionReader(unittest.TestCase):
         self.assertEqual(self.expected_transactions, transactions)
 
         os.remove(filename)
+
+    def test_read_transactions_invalid_row(self):
+        bad_csv = "\n".join([
+            '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"',
+            '"NOT-A-DATE";"Cat";"Sub";"Payee";"-10,00";"100,00";"Toteutunut";"Ei"',
+        ])
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(bad_csv.encode('iso-8859-1'))
+            filename = f.name
+
+        with self.assertRaises(ValueError) as ctx:
+            TransactionReader(filename).read_transactions()
+        self.assertIn("row 2", str(ctx.exception))
+
+        os.remove(filename)
+
+    def test_resolve_status_reconciled(self):
+        self.assertEqual(
+            TransactionReader._resolve_status("Toteutunut", "Kyllä"),
+            TransactionStatus.RECONCILED,
+        )
+
+    def test_resolve_status_cleared(self):
+        self.assertEqual(
+            TransactionReader._resolve_status("Toteutunut", "Ei"),
+            TransactionStatus.CLEARED,
+        )
+
+    def test_resolve_status_pending(self):
+        self.assertEqual(
+            TransactionReader._resolve_status("Odottaa", "Ei"),
+            TransactionStatus.PENDING,
+        )
+
+    def test_resolve_status_unknown_is_pending(self):
+        self.assertEqual(
+            TransactionReader._resolve_status("", ""),
+            TransactionStatus.PENDING,
+        )
+
+    def test_read_transactions_no_header(self):
+        csv_without_header = "\n".join([
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"8 588,83";"Toteutunut";"Ei"',
+        ])
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(csv_without_header.encode('iso-8859-1'))
+            filename = f.name
+
+        transactions = TransactionReader(filename, header=False).read_transactions()
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0].payee, 'Shop A')
+        self.assertEqual(transactions[0].status, TransactionStatus.CLEARED)
+
+        os.remove(filename)

@@ -1,11 +1,22 @@
-[project]
+[tool.poetry]
 name = "ynab"
 version = "0.1.0"
 description = "Tool for dealing with YNAB budget"
-authors = [{name="Tatu Paronen", email="tatu.paronen@gmail.com"}]
+authors = ["Tatu Paronen <tatu.paronen@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = ["requests", "pytest"]
+packages = [{include = "ynab"}]
 
-[tool.setuptools.packages.find]
-include = ["ynab*"]
+[tool.poetry.dependencies]
+python = ">=3.10"
+requests = "*"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+pytest-cov = "*"
+ruff = "*"
+mypy = "*"
+types-requests = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -23,3 +23,73 @@ class TestFileSystemUtil(unittest.TestCase):
 
         os.remove(test_file)
         os.removedirs(temp_dir)
+
+    def test_form_file_paths_empty_dir(self):
+        temp_dir = mkdtemp()
+        paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map={})
+        self.assertEqual([], paths)
+        os.removedirs(temp_dir)
+
+    def test_form_file_paths_unknown_account(self):
+        temp_dir = mkdtemp()
+        test_file = f"{temp_dir}/UNKNOWN_2023.csv"
+        open(test_file, mode="w")
+
+        with self.assertRaises(KeyError):
+            form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map={})
+
+        os.remove(test_file)
+        os.removedirs(temp_dir)
+
+    def test_form_file_paths_multiple_files(self):
+        temp_dir = mkdtemp()
+        file1 = f"{temp_dir}/FI111_period1.csv"
+        file2 = f"{temp_dir}/FI222_period2.csv"
+        open(file1, mode="w")
+        open(file2, mode="w")
+
+        budget_map = {"FI111": "BudgetA", "FI222": "BudgetB"}
+        paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map=budget_map)
+
+        self.assertEqual(len(paths), 2)
+        input_paths = {p[0] for p in paths}
+        output_paths = {p[1] for p in paths}
+        self.assertIn(file1, input_paths)
+        self.assertIn(file2, input_paths)
+        self.assertIn(f"{temp_dir}/BudgetA_period1.csv", output_paths)
+        self.assertIn(f"{temp_dir}/BudgetB_period2.csv", output_paths)
+
+        os.remove(file1)
+        os.remove(file2)
+        os.removedirs(temp_dir)
+
+    def test_form_file_paths_ignores_non_csv_files(self):
+        temp_dir = mkdtemp()
+        csv_file = f"{temp_dir}/FI111_data.csv"
+        txt_file = f"{temp_dir}/FI111_data.txt"
+        open(csv_file, mode="w")
+        open(txt_file, mode="w")
+
+        budget_map = {"FI111": "BudgetA"}
+        paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map=budget_map)
+
+        self.assertEqual(len(paths), 1)
+        self.assertEqual(paths[0][0], csv_file)
+
+        os.remove(csv_file)
+        os.remove(txt_file)
+        os.removedirs(temp_dir)
+
+    def test_form_file_paths_suffix_with_multiple_underscores(self):
+        temp_dir = mkdtemp()
+        test_file = f"{temp_dir}/FI123_2023_04_export.csv"
+        open(test_file, mode="w")
+
+        budget_map = {"FI123": "MyBudget"}
+        paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map=budget_map)
+
+        self.assertEqual(len(paths), 1)
+        self.assertEqual(paths[0][1], f"{temp_dir}/MyBudget_2023_04_export.csv")
+
+        os.remove(test_file)
+        os.removedirs(temp_dir)

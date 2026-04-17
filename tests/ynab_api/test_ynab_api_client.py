@@ -72,3 +72,16 @@ class TestYnabApiClient(unittest.TestCase):
             "https://api.youneedabudget.com/v1/budgets/test_budget_id/transactions?since_date=2023-01-01",
             headers={"Authorization": "Bearer test_token"}
         )
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_get_transactions_raises_on_http_error(self, mock_get):
+        import requests
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError("404")
+        with self.assertRaises(requests.HTTPError):
+            YnabApiClient.get_transactions("token", "budget", date(2023, 1, 1))
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_get_transactions_empty_list(self, mock_get):
+        mock_get.return_value.json.return_value = {"data": {"transactions": []}}
+        result = YnabApiClient.get_transactions("token", "budget", date(2023, 1, 1))
+        self.assertEqual(result, [])

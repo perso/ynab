@@ -37,3 +37,31 @@ class TestTransactionReader(unittest.TestCase):
             self.assertEqual(self.expected_csv_lines, lines)
 
         os.remove(filename)
+
+    def test_write_transactions_appends_without_header(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            filename = f.name
+
+        tx = BankTransaction(date(2023, 4, 20), '', '', 'Shop A', -10.0, None, TransactionStatus.CLEARED)
+        tx2 = BankTransaction(date(2023, 4, 21), '', '', 'Shop B', -5.0, None, TransactionStatus.CLEARED)
+        TransactionWriter(filename).write_transactions([tx])
+        TransactionWriter(filename).write_transactions([tx2])
+
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+        self.assertEqual(lines[0], 'Date,Payee,Memo,Amount\n')
+        self.assertEqual(len(lines), 3)
+
+        os.remove(filename)
+
+    def test_write_transactions_empty_list(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            filename = f.name
+
+        TransactionWriter(filename).write_transactions([])
+
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+        self.assertEqual(lines, ['Date,Payee,Memo,Amount\n'])
+
+        os.remove(filename)
