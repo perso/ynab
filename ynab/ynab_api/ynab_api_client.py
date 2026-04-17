@@ -2,7 +2,7 @@
 
 from collections import namedtuple
 from datetime import date
-from typing import List
+from typing import List, NamedTuple, Optional
 
 import requests
 
@@ -18,33 +18,76 @@ YnabTransaction = namedtuple(
 )
 
 
+class TransactionsResponse(NamedTuple):
+    """Response from the YNAB transactions endpoint."""
+
+    transactions: List[YnabTransaction]
+    server_knowledge: int
+
+
+class YnabApiError(Exception):
+    """Raised when the YNAB API returns an unexpected response."""
+
+
 class YnabApiClient:
-    BASE_URL = "https://api.youneedabudget.com/v1"
+    BASE_URL = "https://api.ynab.com/v1"
 
     @staticmethod
     def get_transactions(
-        token: str, budget_id: str, since_date: date
-    ) -> List[YnabTransaction]:
+        token: str,
+        budget_id: str,
+        since_date: date,
+        last_knowledge_of_server: Optional[int] = None,
+    ) -> TransactionsResponse:
         """Fetch transactions from the YNAB API.
 
+        When ``last_knowledge_of_server`` is provided the endpoint returns only
+        transactions changed since that knowledge mark (delta sync), which keeps
+        payloads small on subsequent runs. The returned ``server_knowledge``
+        should be persisted and passed on the next call.
+
+        When omitted, all transactions on or after ``since_date`` are returned.
+
+        Note: the endpoint is single-response (no page-number pagination).
+        Use delta sync via ``last_knowledge_of_server`` for large budgets.
+
         Args:
-            token: YNAB API bearer token.
+            token: YNAB personal access token.
             budget_id: YNAB budget UUID.
-            since_date: Fetch transactions on or after this date.
+            since_date: Fetch transactions on or after this date (ignored when
+                ``last_knowledge_of_server`` is provided).
+            last_knowledge_of_server: Knowledge mark from a previous call.
 
         Returns:
-            List of ``YnabTransaction`` namedtuples.
+            ``TransactionsResponse`` with the transaction list and new knowledge mark.
 
         Raises:
-            requests.HTTPError: If the API returns a non-2xx status.
+            YnabApiError: On HTTP 429 (rate limit) or malformed response body.
+            requests.HTTPError: On other non-2xx HTTP errors.
         """
-        url = (
-            f"{YnabApiClient.BASE_URL}/budgets/{budget_id}/transactions"
-            f"?since_date={since_date.isoformat()}"
-        )
+        params = f"since_date={since_date.isoformat()}"
+        if last_knowledge_of_server is not None:
+            params += f"&last_knowledge_of_server={last_knowledge_of_server}"
+        url = f"{YnabApiClient.BASE_URL}/budgets/{budget_id}/transactions?{params}"
         response = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After", "unknown")
+            raise YnabApiError(
+                f"YNAB API rate limit reached. Retry after {retry_after} seconds."
+            )
+
         response.raise_for_status()
-        return [
+
+        try:
+            data = response.json()["data"]
+            raw_transactions = data["transactions"]
+            server_knowledge: int = data["server_knowledge"]
+        except (KeyError, ValueError) as exc:
+            raise YnabApiError(f"Unexpected YNAB API response format: {exc}") from exc
+
+        transactions = [
             YnabTransaction(**{field: t[field] for field in YnabTransaction._fields})
-            for t in response.json()["data"]["transactions"]
+            for t in raw_transactions
         ]
+        return TransactionsResponse(transactions=transactions, server_knowledge=server_knowledge)
