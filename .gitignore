@@ -1,0 +1,8 @@
+**/__pycache__
+**/*.egg-info
+ynab.iml
+.idea
+.coverage
+__pycache__
+data
+.venv

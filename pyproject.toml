@@ -1,0 +1,11 @@
+[project]
+name = "ynab"
+version = "0.1.0"
+description = "Tool for dealing with YNAB budget"
+authors = [{name="Tatu Paronen", email="tatu.paronen@gmail.com"}]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["requests", "pytest"]
+
+[tool.setuptools.packages.find]
+include = ["ynab*"]

@@ -1,0 +1,35 @@
+"""Filesystem helpers for mapping bank export files to YNAB import paths."""
+
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+
+def form_file_paths(
+    input_dir: str,
+    output_dir: str,
+    accountno_budget_map: Dict[str, str],
+) -> List[Tuple[str, str]]:
+    """Map bank export CSVs in ``input_dir`` to YNAB import paths in ``output_dir``.
+
+    Input filenames must follow the format ``<account_no>_<suffix>.csv``.
+    The output filename becomes ``<budget_name>_<suffix>.csv``.
+
+    Args:
+        input_dir: Directory containing bank export CSV files.
+        output_dir: Directory for the generated YNAB import CSV files.
+        accountno_budget_map: Mapping of account number to YNAB budget name.
+
+    Returns:
+        List of ``(input_path, output_path)`` string tuples.
+    """
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+    file_paths = []
+
+    for csv_file in input_path.glob("*.csv"):
+        account_no, suffix = csv_file.stem.split("_", maxsplit=1)
+        budget_name = accountno_budget_map[account_no]
+        output_file = output_path / f"{budget_name}_{suffix}.csv"
+        file_paths.append((str(csv_file), str(output_file)))
+
+    return file_paths
