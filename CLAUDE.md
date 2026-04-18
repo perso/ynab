@@ -17,10 +17,15 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - YNAB API amounts are in milliunits (1000 = $1.00); bank CSV amounts are plain floats
 - Credentials are read from `~/.config/ynab/credentials`
 
+**Dedup flow (optional, `YNAB_DEDUP_ENABLED=true`):**
+- `since_date` is derived from the earliest bank transaction date minus the effective `date_tolerance_days` (idempotent for the same input)
+- `YnabBudgetService` fetches transactions and `filter_already_in_ynab` removes matching rows
+- `date_tolerance_days` defaults to `DEFAULT_DATE_TOLERANCE_DAYS` (3) but can be overridden per account in `accounts.toml` (useful for credit cards with posting lag)
+
 **Module layout:**
 - `ynab/bank/` — transaction model, reader, writer, filters
 - `ynab/ynab_api/` — YNAB REST API client (read transactions)
-- `ynab/utilities/` — CSV/date/amount parsing, filesystem helpers, credentials loader
+- `ynab/utilities/` — CSV/date/amount parsing, filesystem helpers, credentials and TOML config loading
 - `tests/` — mirrors `ynab/` structure
 
 ## Workflow rules

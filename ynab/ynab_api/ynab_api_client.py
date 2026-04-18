@@ -1,10 +1,13 @@
 """YNAB REST API client."""
 
+import logging
 from collections import namedtuple
 from datetime import date
 from typing import List, NamedTuple, Optional
 
 import requests
+
+log = logging.getLogger(__name__)
 
 YnabTransaction = namedtuple(
     "YnabTransaction",
@@ -69,6 +72,7 @@ class YnabApiClient:
         if last_knowledge_of_server is not None:
             params += f"&last_knowledge_of_server={last_knowledge_of_server}"
         url = f"{YnabApiClient.BASE_URL}/budgets/{budget_id}/transactions?{params}"
+
         response = requests.get(url, headers={"Authorization": f"Bearer {token}"})
 
         if response.status_code == 429:
@@ -90,4 +94,5 @@ class YnabApiClient:
             YnabTransaction(**{field: t[field] for field in YnabTransaction._fields})
             for t in raw_transactions
         ]
+        log.info("GET %s → %d transactions, server_knowledge=%d", url, len(transactions), server_knowledge)
         return TransactionsResponse(transactions=transactions, server_knowledge=server_knowledge)

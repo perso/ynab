@@ -14,9 +14,8 @@ from ynab.bank.transaction_reader import TransactionReader
 from ynab.bank.transaction_source import BankTransactionSource
 from ynab.bank.transaction_writer import TransactionWriter
 from ynab.budget_service import BudgetService
-from ynab.utilities.config_util import parse_accountno_budget_map, read_credentials_file
+from ynab.utilities.config_util import read_accounts_config, read_credentials_file
 from ynab.utilities.fs_util import form_file_paths
-from ynab.utilities.knowledge_cache import load_server_knowledge, save_server_knowledge
 from ynab.ynab_api.ynab_api_client import YnabApiClient
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
 
@@ -46,20 +45,24 @@ def convert_bank_transactions(
 
     Set ``YNAB_DEDUP_ENABLED=true`` to fetch existing YNAB transactions and
     filter out any bank rows that already appear in the budget.  Requires
-    ``budget_id`` and ``account_id`` to be set for each account in
-    ``YNAB_ACCOUNTNO_BUDGET_MAP``.
+    ``account_id`` per account in ``accounts.toml``, and a budget ID from
+    either ``budget_id`` in ``accounts.toml`` or ``YNAB_BUDGET_ID`` in the
+    environment (per-account value takes precedence).
 
     ``source_factory`` and ``budget_service_factory`` can be overridden in
     tests or to swap in alternative data providers without modifying this
     function.
 
-    On the first dedup run the full transaction history from the bank file's
-    earliest date is fetched. Subsequent runs use YNAB's delta-sync mechanism
-    (``last_knowledge_of_server``) to download only changes, keeping API calls
-    fast and within the 200-request/hour rate limit.
+    The YNAB API is called with a ``since_date`` derived from the earliest
+    transaction date in the bank file minus the date-tolerance buffer, making
+    each run idempotent for the same input data.
     """
-    account_configs = parse_accountno_budget_map(os.environ["YNAB_ACCOUNTNO_BUDGET_MAP"])
+    accounts_config_path = os.environ.get(
+        "YNAB_ACCOUNTS_CONFIG", str(_DATA_DIR.parent / "accounts.toml")
+    )
+    account_configs = read_accounts_config(accounts_config_path)
     dedup_enabled = os.environ.get("YNAB_DEDUP_ENABLED", "").lower() == "true"
+    global_budget_id = os.environ.get("YNAB_BUDGET_ID")
     token: Optional[str] = read_credentials_file() if dedup_enabled else None
     budget_service: Optional[BudgetService] = budget_service_factory(token) if dedup_enabled else None  # type: ignore[arg-type]
 
@@ -76,19 +79,21 @@ def convert_bank_transactions(
 
         if dedup_enabled and transactions:
             cfg = account_configs[mapping.account_no]
-            if not cfg.budget_id or not cfg.account_id:
+            effective_budget_id = cfg.budget_id or global_budget_id
+            if not effective_budget_id or not cfg.account_id:
                 raise ValueError(
-                    f"YNAB_DEDUP_ENABLED=true but 'budget_id' and 'account_id' are missing "
-                    f"for account '{mapping.account_no}'. Update YNAB_ACCOUNTNO_BUDGET_MAP."
+                    f"YNAB_DEDUP_ENABLED=true but dedup config is incomplete for account "
+                    f"'{mapping.account_no}': set 'account_id' in accounts.toml and either "
+                    f"'budget_id' in accounts.toml or YNAB_BUDGET_ID in the environment."
                 )
-            since = min(t.date for t in transactions) - timedelta(days=DEFAULT_DATE_TOLERANCE_DAYS)
-            last_knowledge = load_server_knowledge(cfg.budget_id, cfg.account_id)
+            tolerance = cfg.date_tolerance_days if cfg.date_tolerance_days is not None else DEFAULT_DATE_TOLERANCE_DAYS
+            since = min(t.date for t in transactions) - timedelta(days=tolerance)
             api_response = budget_service.get_transactions(  # type: ignore[union-attr]
-                cfg.budget_id, since, last_knowledge_of_server=last_knowledge
+                effective_budget_id, since
             )
-            save_server_knowledge(cfg.budget_id, cfg.account_id, api_response.server_knowledge)
             transactions = filter_already_in_ynab(
-                transactions, api_response.transactions, account_id=cfg.account_id
+                transactions, api_response.transactions, account_id=cfg.account_id,
+                date_tolerance_days=tolerance,
             )
 
         transactions = sorted(set(transactions))

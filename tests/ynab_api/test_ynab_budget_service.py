@@ -16,6 +16,6 @@ class TestYnabBudgetServiceProtocol(unittest.TestCase):
     def test_delegates_to_api_client(self, mock_get):
         mock_get.return_value = TransactionsResponse(transactions=[], server_knowledge=5)
         service = YnabBudgetService("tok")
-        result = service.get_transactions("b1", date(2023, 1, 1), last_knowledge_of_server=10)
-        mock_get.assert_called_once_with("tok", "b1", date(2023, 1, 1), 10)
+        result = service.get_transactions("b1", date(2023, 1, 1))
+        mock_get.assert_called_once_with("tok", "b1", date(2023, 1, 1))
         self.assertEqual(result.server_knowledge, 5)

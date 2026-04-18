@@ -1,7 +1,6 @@
 """YNAB implementation of the BudgetService protocol."""
 
 from datetime import date
-from typing import Optional
 
 from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabApiClient
 
@@ -21,8 +20,5 @@ class YnabBudgetService:
         self,
         budget_id: str,
         since_date: date,
-        last_knowledge_of_server: Optional[int] = None,
     ) -> TransactionsResponse:
-        return YnabApiClient.get_transactions(
-            self._token, budget_id, since_date, last_knowledge_of_server
-        )
+        return YnabApiClient.get_transactions(self._token, budget_id, since_date)

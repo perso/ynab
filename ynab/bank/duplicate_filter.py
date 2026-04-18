@@ -1,10 +1,13 @@
 """Filter bank transactions that already exist in YNAB."""
 
+import logging
 from datetime import date, datetime
 from typing import Iterable, List, Optional
 
 from ynab.bank.transaction import BankTransaction
 from ynab.ynab_api.ynab_api_client import YnabTransaction
+
+log = logging.getLogger(__name__)
 
 DEFAULT_DATE_TOLERANCE_DAYS = 3
 
@@ -72,4 +75,9 @@ def filter_already_in_ynab(
         else:
             pool.pop(best_idx)
 
+    filtered = len(bank_transactions) - len(kept)
+    log.info(
+        "Dedup: %d bank transaction(s) in, %d matched in YNAB, %d remaining",
+        len(bank_transactions), filtered, len(kept),
+    )
     return kept

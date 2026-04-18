@@ -1,7 +1,7 @@
 """Protocol for budget service integrations."""
 
 from datetime import date
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from ynab.ynab_api.ynab_api_client import TransactionsResponse
 
@@ -19,5 +19,4 @@ class BudgetService(Protocol):
         self,
         budget_id: str,
         since_date: date,
-        last_knowledge_of_server: Optional[int] = None,
     ) -> TransactionsResponse: ...

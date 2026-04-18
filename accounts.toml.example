@@ -1,0 +1,21 @@
+# Account configuration for the YNAB bank import tool.
+# Copy this file to accounts.toml and fill in your values.
+#
+# budget_id is optional per account. When omitted, YNAB_BUDGET_ID from .env
+# is used as the fallback. Set it here only if this account belongs to a
+# different budget than YNAB_BUDGET_ID.
+#
+# account_id is required only when YNAB_DEDUP_ENABLED=true.
+#
+# date_tolerance_days controls how many days of slack is allowed when matching
+# bank transactions against YNAB. Defaults to 3. Credit cards often need a
+# higher value (e.g. 7) because the posted date can lag the purchase date.
+
+[accounts.FI0000000000000001]
+budget_name         = "Checking"
+account_id          = "ynab-account-uuid"
+
+[accounts.FI0000000000000002]
+budget_name         = "Visa"
+account_id          = "ynab-account-uuid"
+date_tolerance_days = 7

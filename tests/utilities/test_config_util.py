@@ -1,8 +1,10 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from ynab.utilities.config_util import AccountConfig, parse_accountno_budget_map, read_credentials_file
+from ynab.utilities.config_util import AccountConfig, read_accounts_config, read_credentials_file
 
 
 class TestConfigUtil(unittest.TestCase):
@@ -28,51 +30,106 @@ class TestConfigUtil(unittest.TestCase):
 
         os.remove(temp_file_path)
 
-    def test_read_credentials_file_preserves_whitespace(self):
-        contents = "token_with_trailing_newline\n"
-
+    def test_read_credentials_file_strips_whitespace(self):
         with NamedTemporaryFile(mode="w", delete=False) as temp_file:
-            temp_file.write(contents)
+            temp_file.write("my-token\n")
             temp_file_path = temp_file.name
 
         result = read_credentials_file(temp_file_path)
-        self.assertEqual(result, contents)
+        self.assertEqual(result, "my-token")
 
         os.remove(temp_file_path)
 
 
-class TestParseAccountnoBudgetMap(unittest.TestCase):
-    def test_legacy_flat_shape(self):
-        raw = '{"FI123": "Budget"}'
-        result = parse_accountno_budget_map(raw)
-        self.assertEqual(result, {"FI123": AccountConfig("Budget", None, None)})
+def _write_toml(content: str) -> Path:
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False)
+    f.write(content)
+    f.close()
+    return Path(f.name)
 
-    def test_nested_shape_full(self):
-        raw = '{"FI123": {"budget_name": "Budget", "budget_id": "b1", "account_id": "a1"}}'
-        result = parse_accountno_budget_map(raw)
-        self.assertEqual(result, {"FI123": AccountConfig("Budget", "b1", "a1")})
 
-    def test_nested_shape_partial_ids(self):
-        raw = '{"FI123": {"budget_name": "Budget"}}'
-        result = parse_accountno_budget_map(raw)
-        self.assertEqual(result, {"FI123": AccountConfig("Budget", None, None)})
+class TestReadAccountsConfig(unittest.TestCase):
+    def test_full_config(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "MyAccount"
+budget_id   = "b1"
+account_id  = "a1"
+""")
+        result = read_accounts_config(path)
+        self.assertEqual(result, {"FI123": AccountConfig("MyAccount", "b1", "a1")})
+        os.remove(path)
 
-    def test_mixed_legacy_and_nested(self):
-        raw = '{"FI1": "OldBudget", "FI2": {"budget_name": "NewBudget", "budget_id": "b2", "account_id": "a2"}}'
-        result = parse_accountno_budget_map(raw)
-        self.assertEqual(result["FI1"], AccountConfig("OldBudget", None, None))
-        self.assertEqual(result["FI2"], AccountConfig("NewBudget", "b2", "a2"))
+    def test_optional_ids_absent(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "MyAccount"
+""")
+        result = read_accounts_config(path)
+        self.assertEqual(result, {"FI123": AccountConfig("MyAccount", None, None)})
+        os.remove(path)
 
-    def test_malformed_json_raises_value_error(self):
-        with self.assertRaises(ValueError):
-            parse_accountno_budget_map("not json")
+    def test_multiple_accounts(self):
+        path = _write_toml("""
+[accounts.FI111]
+budget_name = "Checking"
+budget_id   = "b1"
+account_id  = "a1"
 
-    def test_missing_budget_name_raises_value_error(self):
-        raw = '{"FI123": {"budget_id": "b1"}}'
-        with self.assertRaises(ValueError) as ctx:
-            parse_accountno_budget_map(raw)
-        self.assertIn("FI123", str(ctx.exception))
+[accounts.FI222]
+budget_name = "MasterCard"
+""")
+        result = read_accounts_config(path)
+        self.assertEqual(result["FI111"], AccountConfig("Checking", "b1", "a1"))
+        self.assertEqual(result["FI222"], AccountConfig("MasterCard", None, None))
+        os.remove(path)
 
-    def test_empty_map(self):
-        result = parse_accountno_budget_map("{}")
+    def test_empty_accounts_section(self):
+        path = _write_toml("[accounts]\n")
+        result = read_accounts_config(path)
         self.assertEqual(result, {})
+        os.remove(path)
+
+    def test_missing_file_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            read_accounts_config("/nonexistent/accounts.toml")
+
+    def test_missing_budget_name_raises(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_id = "b1"
+""")
+        with self.assertRaises(ValueError) as ctx:
+            read_accounts_config(path)
+        self.assertIn("FI123", str(ctx.exception))
+        os.remove(path)
+
+    def test_accepts_path_object(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "Budget"
+""")
+        result = read_accounts_config(Path(path))
+        self.assertEqual(result["FI123"].budget_name, "Budget")
+        os.remove(path)
+
+    def test_date_tolerance_days_parsed(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "MyAccount"
+budget_id   = "b1"
+account_id  = "a1"
+date_tolerance_days = 7
+""")
+        result = read_accounts_config(path)
+        self.assertEqual(result["FI123"].date_tolerance_days, 7)
+        os.remove(path)
+
+    def test_date_tolerance_days_absent_is_none(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "MyAccount"
+""")
+        result = read_accounts_config(path)
+        self.assertIsNone(result["FI123"].date_tolerance_days)
+        os.remove(path)

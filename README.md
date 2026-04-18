@@ -8,20 +8,21 @@ Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish 
 
 1. Install dependencies:
    ```bash
-   source .venv/bin/activate
    poetry install
+   source .venv/bin/activate
    ```
 
 2. Place bank export CSVs in `data/input/`. Filenames must follow the format `<account_no>_<anything>.csv`.
 
-3. Set the account → budget mapping via environment variable (or in `.env`):
-   ```
-   YNAB_ACCOUNTNO_BUDGET_MAP={"FI1234567890": {"budget_name": "MyBudget"}}
+3. Copy `accounts.toml.example` to `accounts.toml` and fill in your accounts:
+   ```toml
+   [accounts.FI1234567890]
+   budget_name = "MyBudget"
    ```
 
 4. Run the converter:
    ```bash
-   python -m ynab.main
+   poetry run python -m ynab.main
    ```
    Output CSVs are written to `data/output/`.
 
@@ -33,23 +34,40 @@ When `YNAB_DEDUP_ENABLED=true` the tool fetches transactions from the YNAB API
 before writing each output file and removes any bank rows that already appear in
 YNAB (whether imported previously or entered manually).
 
-Match rule: same amount and date within ±3 days. Each YNAB transaction can match
-at most one bank row (1:1 consumption).
+Match rule: same amount and date within a configurable tolerance (default ±3 days).
+Each YNAB transaction can match at most one bank row (1:1 consumption). The YNAB
+API is always queried from the bank file's earliest transaction date minus the
+tolerance, making each run idempotent for the same input data.
 
 **Configuration:**
 
 1. Add your YNAB API token to `~/.config/ynab/credentials`.
 
-2. Extend the account map with `budget_id` and `account_id` for each account:
+2. Copy `.env.example` to `.env` and set:
    ```
-   YNAB_ACCOUNTNO_BUDGET_MAP={"FI1234567890": {"budget_name": "MyBudget", "budget_id": "<uuid>", "account_id": "<uuid>"}}
+   YNAB_BUDGET_ID=<your-budget-uuid>
    YNAB_DEDUP_ENABLED=true
    ```
 
-On the first run the tool fetches all transactions from the bank file's earliest
-date. Subsequent runs use YNAB's delta-sync mechanism (`last_knowledge_of_server`)
-to fetch only changes, keeping requests well within the 200/hour rate limit.
-Knowledge marks are cached at `~/.cache/ynab/server_knowledge.json`.
+3. Add `budget_id` and `account_id` to each account in `accounts.toml`:
+   ```toml
+   [accounts.FI1234567890]
+   budget_name = "MyBudget"
+   budget_id   = "<budget-uuid>"   # optional if YNAB_BUDGET_ID is set
+   account_id  = "<account-uuid>"
+   ```
+
+**Per-account date tolerance:**
+
+Credit cards often post transactions several days after the purchase date. Set
+`date_tolerance_days` per account to widen the matching window:
+
+```toml
+[accounts.FI1234567890]
+budget_name         = "Visa"
+account_id          = "<account-uuid>"
+date_tolerance_days = 7
+```
 
 ## Authentication
 
@@ -72,21 +90,20 @@ removed but OAuth support is left as future work.
 | `ynab/bank/duplicate_filter.py` | `filter_already_in_ynab` — removes bank rows already present in YNAB |
 | `ynab/utilities/parse_util.py` | Date and amount parsing helpers for the Finnish CSV format |
 | `ynab/utilities/fs_util.py` | `form_file_paths` — maps input files to output paths via the account map |
-| `ynab/utilities/config_util.py` | `read_credentials_file`, `parse_accountno_budget_map` |
-| `ynab/utilities/knowledge_cache.py` | Persists YNAB delta-sync knowledge marks to disk |
+| `ynab/utilities/config_util.py` | `read_credentials_file`, `read_accounts_config` — credentials and TOML config loading |
 | `ynab/ynab_api/ynab_api_client.py` | `YnabApiClient` — fetches transactions from the YNAB REST API |
 | `ynab/main.py` | Entry point |
 
 ## Running tests
 
 ```bash
-pytest tests/
+poetry run pytest tests/
 ```
 
 With coverage report:
 
 ```bash
-pytest tests/ --cov=ynab --cov-report=term-missing
+poetry run pytest tests/ --cov=ynab --cov-report=term-missing
 ```
 
 ## Linting
@@ -94,11 +111,17 @@ pytest tests/ --cov=ynab --cov-report=term-missing
 Check for issues:
 
 ```bash
-ruff check .
+poetry run ruff check .
 ```
 
 Fix auto-fixable issues:
 
 ```bash
-ruff check --fix .
+poetry run ruff check --fix .
+```
+
+## Type checking
+
+```bash
+poetry run mypy ynab/
 ```

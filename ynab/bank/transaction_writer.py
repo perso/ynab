@@ -19,10 +19,9 @@ class TransactionWriter:
         Args:
             transactions: Transactions to write.
         """
-        with open(self.path, mode="a", newline="") as csvfile:
+        with open(self.path, mode="w", newline="") as csvfile:
             writer = csv.writer(csvfile)
-            if self.path.stat().st_size == 0:
-                writer.writerow(_HEADER)
+            writer.writerow(_HEADER)
             for transaction in transactions:
                 writer.writerow(
                     [transaction.date, transaction.payee, "", transaction.amount]

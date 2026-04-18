@@ -1,4 +1,5 @@
 .env
+accounts.toml
 **/__pycache__
 **/*.egg-info
 .iml

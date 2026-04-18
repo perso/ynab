@@ -10,6 +10,7 @@ packages = [{include = "ynab"}]
 python = ">=3.10"
 requests = "*"
 python-dotenv = "^1.2.2"
+tomli = {version = "*", python = "<3.11"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

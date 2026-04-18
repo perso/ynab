@@ -2,20 +2,18 @@ import os
 import unittest
 from datetime import date
 from tempfile import mkdtemp
-from typing import Optional
 from unittest.mock import patch
 
 from ynab.main import convert_bank_transactions, fetch_transactions
+from ynab.utilities.config_util import AccountConfig
 from ynab.utilities.fs_util import FilePathMapping
 from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabTransaction
 
-# Nested shape — the canonical format going forward.
-_ENV_CONVERT = {"YNAB_ACCOUNTNO_BUDGET_MAP": '{"FI111": {"budget_name": "Budget"}}'}
+_ACCOUNT_CONFIG_SIMPLE = {"FI111": AccountConfig("Budget", None, None)}
+_ACCOUNT_CONFIG_DEDUP = {"FI111": AccountConfig("Budget", "b1", "a1")}
 _ENV_FETCH = {"YNAB_BUDGET_ID": "test-budget-id"}
-_ENV_DEDUP = {
-    "YNAB_ACCOUNTNO_BUDGET_MAP": '{"FI111": {"budget_name": "Budget", "budget_id": "b1", "account_id": "a1"}}',
-    "YNAB_DEDUP_ENABLED": "true",
-}
+_ENV_DEDUP = {"YNAB_DEDUP_ENABLED": "true"}
+_ENV_NO_DEDUP = {"YNAB_DEDUP_ENABLED": ""}
 
 _EMPTY_RESPONSE = TransactionsResponse(transactions=[], server_knowledge=0)
 
@@ -63,12 +61,12 @@ class _FakeBudgetService:
         self,
         budget_id: str,
         since_date: date,
-        last_knowledge_of_server: Optional[int] = None,
     ) -> TransactionsResponse:
-        self.calls.append((budget_id, since_date, last_knowledge_of_server))
+        self.calls.append((budget_id, since_date))
         return self.response
 
 
+@patch.dict(os.environ, _ENV_NO_DEDUP)
 class TestConvertBankTransactions(unittest.TestCase):
     def _write_input_csv(self, path: str, rows: list[str]) -> None:
         header = '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"'
@@ -76,8 +74,8 @@ class TestConvertBankTransactions(unittest.TestCase):
         with open(path, "wb") as f:
             f.write(content.encode("iso-8859-1"))
 
-    @patch.dict(os.environ, _ENV_CONVERT)
-    def test_filters_pending_transactions(self):
+    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    def test_filters_pending_transactions(self, _mock_cfg):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
@@ -101,8 +99,8 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch.dict(os.environ, _ENV_CONVERT)
-    def test_deduplicates_and_sorts_by_date(self):
+    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    def test_deduplicates_and_sorts_by_date(self, _mock_cfg):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
@@ -128,8 +126,8 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch.dict(os.environ, _ENV_CONVERT)
-    def test_empty_input_writes_only_header(self):
+    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    def test_empty_input_writes_only_header(self, _mock_cfg):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
@@ -148,8 +146,8 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch.dict(os.environ, _ENV_CONVERT)
-    def test_no_file_paths_does_nothing(self):
+    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    def test_no_file_paths_does_nothing(self, _mock_cfg):
         with patch("ynab.main.form_file_paths", return_value=[]):
             convert_bank_transactions()
 
@@ -168,14 +166,12 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         input_file: str,
         output_file: str,
         service: _FakeBudgetService,
-        last_knowledge: Optional[int] = None,
     ) -> None:
         with (
+            patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
             patch("ynab.main.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
             patch("ynab.main.read_credentials_file", return_value="token"),
-            patch("ynab.main.load_server_knowledge", return_value=last_knowledge),
-            patch("ynab.main.save_server_knowledge"),
         ):
             convert_bank_transactions(budget_service_factory=lambda _token: service)
 
@@ -208,6 +204,34 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         os.removedirs(temp_dir)
 
     @patch.dict(os.environ, _ENV_DEDUP)
+    def test_per_account_date_tolerance_overrides_default(self):
+        account_cfg_custom = {"FI111": AccountConfig("Budget", "b1", "a1", date_tolerance_days=7)}
+        service = _FakeBudgetService()
+
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        self._write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with (
+            patch("ynab.main.read_accounts_config", return_value=account_cfg_custom),
+            patch("ynab.main.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.main.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(budget_service_factory=lambda _token: service)
+
+        _budget_id, since_date = service.calls[0]
+        # min date is 2023-04-20, minus 7-day custom tolerance → 2023-04-13
+        self.assertEqual(since_date, date(2023, 4, 13))
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    @patch.dict(os.environ, _ENV_DEDUP)
     def test_since_date_derived_from_min_bank_date_minus_tolerance(self):
         service = _FakeBudgetService()
 
@@ -221,38 +245,10 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
 
         self._run_with_fake_service(input_file, output_file, service)
 
-        budget_id, since_date, _knowledge = service.calls[0]
+        budget_id, since_date = service.calls[0]
         self.assertEqual(budget_id, "b1")
         # min date is 2023-04-20, minus 3-day tolerance → 2023-04-17
         self.assertEqual(since_date, date(2023, 4, 17))
-
-        os.remove(input_file)
-        os.remove(output_file)
-        os.removedirs(temp_dir)
-
-    @patch.dict(os.environ, _ENV_DEDUP)
-    def test_passes_knowledge_to_service_and_saves_new_value(self):
-        service = _FakeBudgetService(TransactionsResponse(transactions=[], server_knowledge=99))
-
-        temp_dir = mkdtemp()
-        input_file = f"{temp_dir}/input.csv"
-        output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
-            '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
-        ])
-
-        with (
-            patch("ynab.main.form_file_paths",
-                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
-            patch("ynab.main.read_credentials_file", return_value="token"),
-            patch("ynab.main.load_server_knowledge", return_value=42),
-            patch("ynab.main.save_server_knowledge") as mock_save,
-        ):
-            convert_bank_transactions(budget_service_factory=lambda _token: service)
-
-        _budget_id, _since_date, knowledge = service.calls[0]
-        self.assertEqual(knowledge, 42)
-        mock_save.assert_called_once_with("b1", "a1", 99)
 
         os.remove(input_file)
         os.remove(output_file)
@@ -271,8 +267,11 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"";"Odottaa";"Ei"',
         ])
 
-        with patch("ynab.main.form_file_paths",
-                   return_value=[FilePathMapping("FI111", input_file, output_file)]):
+        with (
+            patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.main.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+        ):
             convert_bank_transactions(budget_service_factory=lambda _token: service)
 
         self.assertEqual(service.calls, [])
@@ -281,17 +280,15 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch.dict(os.environ, _ENV_CONVERT)
+    @patch.dict(os.environ, _ENV_NO_DEDUP)
+    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
     @patch("ynab.main.read_credentials_file")
-    def test_credentials_not_loaded_when_dedup_disabled(self, mock_creds):
+    def test_credentials_not_loaded_when_dedup_disabled(self, mock_creds, _mock_cfg):
         with patch("ynab.main.form_file_paths", return_value=[]):
             convert_bank_transactions()
         mock_creds.assert_not_called()
 
-    @patch.dict(os.environ, {
-        "YNAB_ACCOUNTNO_BUDGET_MAP": '{"FI111": {"budget_name": "Budget"}}',
-        "YNAB_DEDUP_ENABLED": "true",
-    })
+    @patch.dict(os.environ, _ENV_DEDUP)
     @patch("ynab.main.read_credentials_file", return_value="token")
     def test_raises_when_dedup_enabled_but_account_ids_missing(self, _mock_creds):
         service = _FakeBudgetService()
@@ -304,14 +301,43 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         with open(input_file, "wb") as f:
             f.write(content.encode("iso-8859-1"))
 
-        with patch("ynab.main.form_file_paths",
-                   return_value=[FilePathMapping("FI111", input_file, output_file)]):
-            with self.assertRaises(ValueError) as ctx:
-                convert_bank_transactions(budget_service_factory=lambda _token: service)
+        with (
+            patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE),
+            patch("ynab.main.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            self.assertRaises(ValueError) as ctx,
+        ):
+            convert_bank_transactions(budget_service_factory=lambda _token: service)
 
         self.assertIn("FI111", str(ctx.exception))
 
+    @patch.dict(os.environ, {**_ENV_DEDUP, "YNAB_BUDGET_ID": "env-budget-id"})
+    def test_uses_global_budget_id_when_account_budget_id_absent(self):
+        """budget_id absent from accounts.toml falls back to YNAB_BUDGET_ID."""
+        account_cfg_no_budget_id = {"FI111": AccountConfig("Budget", None, "a1")}
+        service = _FakeBudgetService()
+
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        self._write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with (
+            patch("ynab.main.read_accounts_config", return_value=account_cfg_no_budget_id),
+            patch("ynab.main.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.main.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(budget_service_factory=lambda _token: service)
+
+        self.assertEqual(len(service.calls), 1)
+        budget_id_used, _ = service.calls[0]
+        self.assertEqual(budget_id_used, "env-budget-id")
+
         os.remove(input_file)
+        os.remove(output_file)
         os.removedirs(temp_dir)
 
 

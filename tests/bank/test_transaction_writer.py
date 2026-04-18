@@ -38,19 +38,21 @@ class TestTransactionReader(unittest.TestCase):
 
         os.remove(filename)
 
-    def test_write_transactions_appends_without_header(self):
+    def test_second_write_overwrites_first(self):
         with tempfile.NamedTemporaryFile(delete=False) as f:
             filename = f.name
 
-        tx = BankTransaction(date(2023, 4, 20), '', '', 'Shop A', -10.0, None, TransactionStatus.CLEARED)
+        tx1 = BankTransaction(date(2023, 4, 20), '', '', 'Shop A', -10.0, None, TransactionStatus.CLEARED)
         tx2 = BankTransaction(date(2023, 4, 21), '', '', 'Shop B', -5.0, None, TransactionStatus.CLEARED)
-        TransactionWriter(filename).write_transactions([tx])
+        TransactionWriter(filename).write_transactions([tx1])
         TransactionWriter(filename).write_transactions([tx2])
 
         with open(filename, 'r') as f:
             lines = f.readlines()
         self.assertEqual(lines[0], 'Date,Payee,Memo,Amount\n')
-        self.assertEqual(len(lines), 3)
+        self.assertEqual(len(lines), 2)
+        self.assertIn('Shop B', lines[1])
+        self.assertNotIn('Shop A', ''.join(lines))
 
         os.remove(filename)
 
