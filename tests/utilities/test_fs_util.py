@@ -2,7 +2,7 @@ import os
 import unittest
 from tempfile import mkdtemp
 
-from ynab.utilities.fs_util import form_file_paths
+from ynab.utilities.fs_util import FilePathMapping, form_file_paths
 
 
 class TestFileSystemUtil(unittest.TestCase):
@@ -13,7 +13,13 @@ class TestFileSystemUtil(unittest.TestCase):
         open(test_file, mode="w")
 
         test_budget_map = {"FI1234567890": "TestBudget"}
-        expected_output = [(test_file, f"{temp_dir}/TestBudget_2023.03.24-2023.04.24.csv")]
+        expected_output = [
+            FilePathMapping(
+                "FI1234567890",
+                test_file,
+                f"{temp_dir}/TestBudget_2023.03.24-2023.04.24.csv",
+            )
+        ]
 
         paths = form_file_paths(input_dir=temp_dir,
                                 output_dir=temp_dir,
@@ -52,8 +58,8 @@ class TestFileSystemUtil(unittest.TestCase):
         paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map=budget_map)
 
         self.assertEqual(len(paths), 2)
-        input_paths = {p[0] for p in paths}
-        output_paths = {p[1] for p in paths}
+        input_paths = {p.input_path for p in paths}
+        output_paths = {p.output_path for p in paths}
         self.assertIn(file1, input_paths)
         self.assertIn(file2, input_paths)
         self.assertIn(f"{temp_dir}/BudgetA_period1.csv", output_paths)
@@ -74,7 +80,7 @@ class TestFileSystemUtil(unittest.TestCase):
         paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map=budget_map)
 
         self.assertEqual(len(paths), 1)
-        self.assertEqual(paths[0][0], csv_file)
+        self.assertEqual(paths[0].input_path, csv_file)
 
         os.remove(csv_file)
         os.remove(txt_file)
@@ -89,7 +95,7 @@ class TestFileSystemUtil(unittest.TestCase):
         paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map=budget_map)
 
         self.assertEqual(len(paths), 1)
-        self.assertEqual(paths[0][1], f"{temp_dir}/MyBudget_2023_04_export.csv")
+        self.assertEqual(paths[0].output_path, f"{temp_dir}/MyBudget_2023_04_export.csv")
 
         os.remove(test_file)
         os.removedirs(temp_dir)
