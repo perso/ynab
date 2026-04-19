@@ -77,8 +77,9 @@ class TestYnabApiClient(unittest.TestCase):
 
         self.assertEqual(result, TransactionsResponse([_SAMPLE_TRANSACTION], 42))
         mock_get.assert_called_once_with(
-            "https://api.ynab.com/v1/budgets/test_budget_id/transactions?since_date=2023-01-01",
+            "https://api.ynab.com/v1/budgets/test_budget_id/transactions",
             headers={"Authorization": "Bearer test_token"},
+            params={"since_date": "2023-01-01"},
         )
 
     @patch("ynab.ynab_api.ynab_api_client.requests.get")
@@ -90,9 +91,9 @@ class TestYnabApiClient(unittest.TestCase):
         )
 
         self.assertEqual(result.server_knowledge, 99)
-        called_url = mock_get.call_args[0][0]
-        self.assertIn("last_knowledge_of_server=42", called_url)
-        self.assertIn("since_date=2023-01-01", called_url)
+        called_params = mock_get.call_args[1]["params"]
+        self.assertEqual(called_params["last_knowledge_of_server"], 42)
+        self.assertEqual(called_params["since_date"], "2023-01-01")
 
     @patch("ynab.ynab_api.ynab_api_client.requests.get")
     def test_get_transactions_raises_on_http_error(self, mock_get):

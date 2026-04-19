@@ -68,12 +68,12 @@ class YnabApiClient:
             YnabApiError: On HTTP 429 (rate limit) or malformed response body.
             requests.HTTPError: On other non-2xx HTTP errors.
         """
-        params = f"since_date={since_date.isoformat()}"
+        query: Dict[str, Any] = {"since_date": since_date.isoformat()}
         if last_knowledge_of_server is not None:
-            params += f"&last_knowledge_of_server={last_knowledge_of_server}"
-        url = f"{YnabApiClient.BASE_URL}/budgets/{budget_id}/transactions?{params}"
+            query["last_knowledge_of_server"] = last_knowledge_of_server
+        url = f"{YnabApiClient.BASE_URL}/budgets/{budget_id}/transactions"
 
-        response = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, params=query)
 
         if response.status_code == 429:
             retry_after = response.headers.get("Retry-After", "unknown")
@@ -94,7 +94,7 @@ class YnabApiClient:
             YnabTransaction(**{field: t[field] for field in YnabTransaction._fields})
             for t in raw_transactions
         ]
-        log.info("GET %s → %d transactions, server_knowledge=%d", url, len(transactions), server_knowledge)
+        log.info("GET %s → %d transactions, server_knowledge=%d", response.url, len(transactions), server_knowledge)
         return TransactionsResponse(transactions=transactions, server_knowledge=server_knowledge)
 
     @staticmethod
