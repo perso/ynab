@@ -20,6 +20,13 @@ _ENV_UPLOAD = {"YNAB_UPLOAD_ENABLED": "true", "YNAB_DEDUP_ENABLED": ""}
 _EMPTY_RESPONSE = TransactionsResponse(transactions=[], server_knowledge=0)
 
 
+def _write_input_csv(path: str, rows: list[str]) -> None:
+    header = '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"'
+    content = "\n".join([header] + rows)
+    with open(path, "wb") as f:
+        f.write(content.encode("iso-8859-1"))
+
+
 def _make_ynab_transaction(
     txn_date: str,
     amount: int,
@@ -66,18 +73,12 @@ class _FakeBudgetService:
 
 @patch.dict(os.environ, _ENV_NO_DEDUP)
 class TestConvertBankTransactions(unittest.TestCase):
-    def _write_input_csv(self, path: str, rows: list[str]) -> None:
-        header = '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"'
-        content = "\n".join([header] + rows)
-        with open(path, "wb") as f:
-            f.write(content.encode("iso-8859-1"))
-
     @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
     def test_filters_pending_transactions(self, _mock_cfg):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"8 588,83";"Toteutunut";"Ei"',
             '"19.04.2023";"Cat";"Sub";"Shop B";"-7,70";"";"Odottaa";"Ei"',
         ])
@@ -102,7 +103,7 @@ class TestConvertBankTransactions(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
             '"19.04.2023";"Cat";"Sub";"Shop B";"-7,70";"200,00";"Toteutunut";"Ei"',
@@ -129,7 +130,7 @@ class TestConvertBankTransactions(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [])
+        _write_input_csv(input_file, [])
 
         with patch("ynab.main.form_file_paths",
                    return_value=[FilePathMapping("FI111", input_file, output_file)]):
@@ -152,12 +153,6 @@ class TestConvertBankTransactions(unittest.TestCase):
 
 class TestConvertBankTransactionsWithDedup(unittest.TestCase):
     """Integration tests for the dedup path using _FakeBudgetService injection."""
-
-    def _write_input_csv(self, path: str, rows: list[str]) -> None:
-        header = '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"'
-        content = "\n".join([header] + rows)
-        with open(path, "wb") as f:
-            f.write(content.encode("iso-8859-1"))
 
     def _run_with_fake_service(
         self,
@@ -183,7 +178,7 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
             '"19.04.2023";"Cat";"Sub";"Shop B";"-7,70";"200,00";"Toteutunut";"Ei"',
         ])
@@ -209,7 +204,7 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
         ])
 
@@ -236,7 +231,7 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
             '"22.04.2023";"Cat";"Sub";"Shop B";"-7,70";"200,00";"Toteutunut";"Ei"',
         ])
@@ -261,7 +256,7 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"";"Odottaa";"Ei"',
         ])
 
@@ -318,7 +313,7 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
         ])
 
@@ -342,12 +337,6 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
 class TestConvertBankTransactionsWithUpload(unittest.TestCase):
     """Integration tests for the YNAB_UPLOAD_ENABLED path."""
 
-    def _write_input_csv(self, path: str, rows: list[str]) -> None:
-        header = '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"'
-        content = "\n".join([header] + rows)
-        with open(path, "wb") as f:
-            f.write(content.encode("iso-8859-1"))
-
     def _run_with_fake_service(
         self,
         input_file: str,
@@ -369,7 +358,7 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
         ])
 
@@ -392,7 +381,7 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
         ])
 
@@ -415,7 +404,7 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
         # All PENDING — filtered out before upload
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"";"Odottaa";"Ei"',
         ])
 
@@ -443,7 +432,7 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
         ])
 
@@ -461,19 +450,13 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
 class TestConvertBankTransactionsWithDedupAndUpload(unittest.TestCase):
     """Verify that dedup and upload can both run in the same pass."""
 
-    def _write_input_csv(self, path: str, rows: list[str]) -> None:
-        header = '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"'
-        content = "\n".join([header] + rows)
-        with open(path, "wb") as f:
-            f.write(content.encode("iso-8859-1"))
-
     @patch.dict(os.environ, {"YNAB_DEDUP_ENABLED": "true", "YNAB_UPLOAD_ENABLED": "true"})
     def test_dedup_and_upload_both_run(self):
         service = _FakeBudgetService(response=_EMPTY_RESPONSE, created_count=1)
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
-        self._write_input_csv(input_file, [
+        _write_input_csv(input_file, [
             '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
         ])
 
