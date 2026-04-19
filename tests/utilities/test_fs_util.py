@@ -86,6 +86,18 @@ class TestFileSystemUtil(unittest.TestCase):
         os.remove(txt_file)
         os.removedirs(temp_dir)
 
+    def test_form_file_paths_filename_without_underscore(self):
+        temp_dir = mkdtemp()
+        csv_file = f"{temp_dir}/export.csv"
+        open(csv_file, mode="w")
+
+        with self.assertRaises(ValueError) as ctx:
+            form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map={})
+        self.assertIn("export.csv", str(ctx.exception))
+
+        os.remove(csv_file)
+        os.removedirs(temp_dir)
+
     def test_form_file_paths_suffix_with_multiple_underscores(self):
         temp_dir = mkdtemp()
         test_file = f"{temp_dir}/FI123_2023_04_export.csv"

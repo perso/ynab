@@ -33,7 +33,13 @@ def form_file_paths(
     file_paths = []
 
     for csv_file in input_path.glob("*.csv"):
-        account_no, suffix = csv_file.stem.split("_", maxsplit=1)
+        parts = csv_file.stem.split("_", maxsplit=1)
+        if len(parts) != 2:
+            raise ValueError(
+                f"Input filename '{csv_file.name}' does not match the required format "
+                f"'<account_no>_<suffix>.csv'"
+            )
+        account_no, suffix = parts
         budget_name = accountno_budget_map[account_no]
         output_file = output_path / f"{budget_name}_{suffix}.csv"
         file_paths.append(FilePathMapping(account_no, str(csv_file), str(output_file)))
