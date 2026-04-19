@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "ynab"}]
 
 [tool.poetry.scripts]
-ynab = "ynab.main:run_app"
+ynab = "ynab.cli:run_app"
 
 [tool.poetry.dependencies]
 python = ">=3.10"

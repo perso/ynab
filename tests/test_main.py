@@ -7,7 +7,7 @@ from typing import List
 from unittest.mock import patch
 
 from ynab.bank.transaction import BankTransaction
-from ynab.main import convert_bank_transactions
+from ynab.converter import convert_bank_transactions
 from ynab.utilities.config_util import AccountConfig
 from ynab.utilities.fs_util import FilePathMapping
 from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabTransaction
@@ -70,7 +70,7 @@ class _FakeBudgetService:
 
 
 class TestConvertBankTransactions(unittest.TestCase):
-    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    @patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
     def test_filters_pending_transactions(self, _mock_cfg):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
@@ -80,7 +80,7 @@ class TestConvertBankTransactions(unittest.TestCase):
             '"19.04.2023";"Cat";"Sub";"Shop B";"-7,70";"";"Odottaa";"Ei"',
         ])
 
-        with patch("ynab.main.form_file_paths",
+        with patch("ynab.converter.form_file_paths",
                    return_value=[FilePathMapping("FI111", input_file, output_file)]):
             convert_bank_transactions(dedup_enabled=False, upload_enabled=False)
 
@@ -95,7 +95,7 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    @patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
     def test_deduplicates_and_sorts_by_date(self, _mock_cfg):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
@@ -106,7 +106,7 @@ class TestConvertBankTransactions(unittest.TestCase):
             '"19.04.2023";"Cat";"Sub";"Shop B";"-7,70";"200,00";"Toteutunut";"Ei"',
         ])
 
-        with patch("ynab.main.form_file_paths",
+        with patch("ynab.converter.form_file_paths",
                    return_value=[FilePathMapping("FI111", input_file, output_file)]):
             convert_bank_transactions(dedup_enabled=False, upload_enabled=False)
 
@@ -122,14 +122,14 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    @patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
     def test_empty_input_writes_only_header(self, _mock_cfg):
         temp_dir = mkdtemp()
         input_file = f"{temp_dir}/input.csv"
         output_file = f"{temp_dir}/output.csv"
         _write_input_csv(input_file, [])
 
-        with patch("ynab.main.form_file_paths",
+        with patch("ynab.converter.form_file_paths",
                    return_value=[FilePathMapping("FI111", input_file, output_file)]):
             convert_bank_transactions(dedup_enabled=False, upload_enabled=False)
 
@@ -142,9 +142,9 @@ class TestConvertBankTransactions(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    @patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
     def test_no_file_paths_does_nothing(self, _mock_cfg):
-        with patch("ynab.main.form_file_paths", return_value=[]):
+        with patch("ynab.converter.form_file_paths", return_value=[]):
             convert_bank_transactions(dedup_enabled=False, upload_enabled=False)
 
 
@@ -158,10 +158,10 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         service: _FakeBudgetService,
     ) -> None:
         with (
-            patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
-            patch("ynab.main.form_file_paths",
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
-            patch("ynab.main.read_credentials_file", return_value="token"),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
         ):
             convert_bank_transactions(
                 budget_service_factory=lambda _token: service,
@@ -207,10 +207,10 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         ])
 
         with (
-            patch("ynab.main.read_accounts_config", return_value=account_cfg_custom),
-            patch("ynab.main.form_file_paths",
+            patch("ynab.converter.read_accounts_config", return_value=account_cfg_custom),
+            patch("ynab.converter.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
-            patch("ynab.main.read_credentials_file", return_value="token"),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
         ):
             convert_bank_transactions(
                 budget_service_factory=lambda _token: service,
@@ -247,7 +247,7 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch("ynab.main.read_credentials_file", return_value="token")
+    @patch("ynab.converter.read_credentials_file", return_value="token")
     def test_api_not_called_when_all_transactions_filtered_as_pending(self, _mock_creds):
         """No budget service call when the CLEARED filter removes all transactions."""
         service = _FakeBudgetService()
@@ -260,8 +260,8 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         ])
 
         with (
-            patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
-            patch("ynab.main.form_file_paths",
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
         ):
             convert_bank_transactions(
@@ -275,14 +275,14 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
-    @patch("ynab.main.read_credentials_file")
+    @patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    @patch("ynab.converter.read_credentials_file")
     def test_credentials_not_loaded_when_dedup_disabled(self, mock_creds, _mock_cfg):
-        with patch("ynab.main.form_file_paths", return_value=[]):
+        with patch("ynab.converter.form_file_paths", return_value=[]):
             convert_bank_transactions(dedup_enabled=False, upload_enabled=False)
         mock_creds.assert_not_called()
 
-    @patch("ynab.main.read_credentials_file", return_value="token")
+    @patch("ynab.converter.read_credentials_file", return_value="token")
     def test_raises_when_dedup_enabled_but_account_ids_missing(self, _mock_creds):
         service = _FakeBudgetService()
 
@@ -295,8 +295,8 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
             f.write(content.encode("iso-8859-1"))
 
         with (
-            patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE),
-            patch("ynab.main.form_file_paths",
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE),
+            patch("ynab.converter.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
             self.assertRaises(ValueError) as ctx,
         ):
@@ -321,10 +321,10 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
         ])
 
         with (
-            patch("ynab.main.read_accounts_config", return_value=account_cfg_no_budget_id),
-            patch("ynab.main.form_file_paths",
+            patch("ynab.converter.read_accounts_config", return_value=account_cfg_no_budget_id),
+            patch("ynab.converter.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
-            patch("ynab.main.read_credentials_file", return_value="token"),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
         ):
             convert_bank_transactions(
                 budget_service_factory=lambda _token: service,
@@ -352,10 +352,10 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         account_config: dict,
     ) -> None:
         with (
-            patch("ynab.main.read_accounts_config", return_value=account_config),
-            patch("ynab.main.form_file_paths",
+            patch("ynab.converter.read_accounts_config", return_value=account_config),
+            patch("ynab.converter.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
-            patch("ynab.main.read_credentials_file", return_value="token"),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
         ):
             convert_bank_transactions(
                 budget_service_factory=lambda _token: service,
@@ -423,11 +423,11 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
-    @patch("ynab.main.read_credentials_file")
-    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    @patch("ynab.converter.read_credentials_file")
+    @patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
     def test_credentials_loaded_when_upload_enabled(self, _mock_cfg, mock_creds):
         mock_creds.return_value = "token"
-        with patch("ynab.main.form_file_paths", return_value=[]):
+        with patch("ynab.converter.form_file_paths", return_value=[]):
             convert_bank_transactions(upload_enabled=True)
         mock_creds.assert_called_once()
 
@@ -442,10 +442,10 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         ])
 
         with (
-            patch("ynab.main.read_accounts_config", return_value=account_cfg_no_budget_id),
-            patch("ynab.main.form_file_paths",
+            patch("ynab.converter.read_accounts_config", return_value=account_cfg_no_budget_id),
+            patch("ynab.converter.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
-            patch("ynab.main.read_credentials_file", return_value="token"),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
         ):
             convert_bank_transactions(
                 budget_service_factory=lambda _token: service,
@@ -475,10 +475,10 @@ class TestConvertBankTransactionsWithDedupAndUpload(unittest.TestCase):
         ])
 
         with (
-            patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
-            patch("ynab.main.form_file_paths",
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.form_file_paths",
                   return_value=[FilePathMapping("FI111", input_file, output_file)]),
-            patch("ynab.main.read_credentials_file", return_value="token"),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
         ):
             convert_bank_transactions(
                 budget_service_factory=lambda _token: service,
@@ -501,9 +501,10 @@ class TestConvertBankTransactionsWithDedupAndUpload(unittest.TestCase):
 
 
 class TestRunApp(unittest.TestCase):
-    @patch("ynab.main.convert_bank_transactions")
+    @patch("ynab.cli.convert_bank_transactions")
     def test_run_app_calls_convert_with_defaults(self, mock_convert):
-        from ynab.main import run_app, _CONFIG_DIR
+        from ynab.cli import run_app
+        from ynab.converter import _CONFIG_DIR
         with patch.object(sys, "argv", ["ynab"]):
             run_app()
         mock_convert.assert_called_once_with(
@@ -514,9 +515,9 @@ class TestRunApp(unittest.TestCase):
             global_budget_id=None,
         )
 
-    @patch("ynab.main.convert_bank_transactions")
+    @patch("ynab.cli.convert_bank_transactions")
     def test_run_app_passes_flags(self, mock_convert):
-        from ynab.main import run_app
+        from ynab.cli import run_app
         with patch.object(sys, "argv", [
             "ynab",
             "--input-dir", "/tmp/in",
@@ -538,9 +539,9 @@ class TestRunApp(unittest.TestCase):
 class TestRunInit(unittest.TestCase):
     def test_init_creates_directories_and_template(self):
         from importlib.resources import files
-        from ynab.main import run_init
+        from ynab.cli import run_init
         expected_template = files("ynab.templates").joinpath("accounts.toml.example").read_text(encoding="utf-8")
-        with patch("ynab.main._CONFIG_DIR") as mock_dir:
+        with patch("ynab.cli._CONFIG_DIR") as mock_dir:
             mock_dir.mkdir = unittest.mock.MagicMock()
             input_dir = unittest.mock.MagicMock()
             output_dir = unittest.mock.MagicMock()
@@ -558,8 +559,8 @@ class TestRunInit(unittest.TestCase):
         accounts_path.write_text.assert_called_once_with(expected_template)
 
     def test_init_skips_existing_accounts_toml(self):
-        from ynab.main import run_init
-        with patch("ynab.main._CONFIG_DIR") as mock_dir:
+        from ynab.cli import run_init
+        with patch("ynab.cli._CONFIG_DIR") as mock_dir:
             mock_dir.mkdir = unittest.mock.MagicMock()
             input_dir = unittest.mock.MagicMock()
             output_dir = unittest.mock.MagicMock()
