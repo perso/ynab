@@ -83,19 +83,6 @@ class TestYnabApiClient(unittest.TestCase):
         )
 
     @patch("ynab.ynab_api.ynab_api_client.requests.get")
-    def test_get_transactions_with_delta_sync(self, mock_get):
-        mock_get.return_value = _mock_response([], server_knowledge=99)
-
-        result = YnabApiClient.get_transactions(
-            "token", "budget", date(2023, 1, 1), last_knowledge_of_server=42
-        )
-
-        self.assertEqual(result.server_knowledge, 99)
-        called_params = mock_get.call_args[1]["params"]
-        self.assertEqual(called_params["last_knowledge_of_server"], 42)
-        self.assertEqual(called_params["since_date"], "2023-01-01")
-
-    @patch("ynab.ynab_api.ynab_api_client.requests.get")
     def test_get_transactions_raises_on_http_error(self, mock_get):
         mock = MagicMock()
         mock.status_code = 500

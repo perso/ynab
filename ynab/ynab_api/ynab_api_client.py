@@ -52,26 +52,17 @@ class YnabApiClient:
         token: str,
         budget_id: str,
         since_date: date,
-        last_knowledge_of_server: Optional[int] = None,
     ) -> TransactionsResponse:
         """Fetch transactions from the YNAB API.
 
-        When ``last_knowledge_of_server`` is provided the endpoint returns only
-        transactions changed since that knowledge mark (delta sync), which keeps
-        payloads small on subsequent runs. The returned ``server_knowledge``
-        should be persisted and passed on the next call.
-
-        When omitted, all transactions on or after ``since_date`` are returned.
+        Returns all transactions on or after ``since_date``.
 
         Note: the endpoint is single-response (no page-number pagination).
-        Use delta sync via ``last_knowledge_of_server`` for large budgets.
 
         Args:
             token: YNAB personal access token.
             budget_id: YNAB budget UUID.
-            since_date: Fetch transactions on or after this date (ignored when
-                ``last_knowledge_of_server`` is provided).
-            last_knowledge_of_server: Knowledge mark from a previous call.
+            since_date: Fetch transactions on or after this date.
 
         Returns:
             ``TransactionsResponse`` with the transaction list and new knowledge mark.
@@ -81,8 +72,6 @@ class YnabApiClient:
             requests.HTTPError: On other non-2xx HTTP errors.
         """
         query: Dict[str, Any] = {"since_date": since_date.isoformat()}
-        if last_knowledge_of_server is not None:
-            query["last_knowledge_of_server"] = last_knowledge_of_server
         url = f"{YnabApiClient.BASE_URL}/budgets/{budget_id}/transactions"
 
         response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, params=query)
