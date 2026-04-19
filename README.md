@@ -149,17 +149,20 @@ removed but OAuth support is left as future work.
 
 | Module | Description |
 | --- | --- |
+| `ynab/converter.py` | `convert_bank_transactions` — top-level pipeline orchestration |
+| `ynab/cli.py` | Argument parsing (`build_parser`), `run_init`, `run_app` — CLI entry point |
+| `ynab/budget_service.py` | `BudgetService` protocol (interface for the YNAB API layer) |
 | `ynab/bank/transaction.py` | `BankTransaction` NamedTuple and `TransactionStatus` enum |
 | `ynab/bank/transaction_reader.py` | Parses Finnish bank CSVs into `BankTransaction` lists |
 | `ynab/bank/transaction_writer.py` | Writes YNAB import CSVs |
 | `ynab/bank/transaction_filters.py` | `filter_unchecked_transactions` — keeps only CLEARED transactions |
 | `ynab/bank/duplicate_filter.py` | `filter_already_in_ynab` — removes bank rows already present in YNAB |
-| `ynab/bank/transaction_uploader.py` | `to_api_payloads` — converts `BankTransaction` lists to YNAB API payloads |
+| `ynab/ynab_api/transaction_uploader.py` | `to_api_payloads` — converts `BankTransaction` lists to YNAB API payloads |
+| `ynab/ynab_api/ynab_api_client.py` | `YnabApiClient` — fetches and creates transactions via the YNAB REST API |
+| `ynab/ynab_api/ynab_budget_service.py` | `YnabBudgetService` — `BudgetService` implementation backed by `YnabApiClient` |
 | `ynab/utilities/parse_util.py` | Date and amount parsing helpers for the Finnish CSV format |
 | `ynab/utilities/fs_util.py` | `form_file_paths` — maps input files to output paths via the account map |
 | `ynab/utilities/config_util.py` | `read_credentials_file`, `read_accounts_config` — credentials and TOML config loading |
-| `ynab/ynab_api/ynab_api_client.py` | `YnabApiClient` — fetches transactions from the YNAB REST API |
-| `ynab/main.py` | Entry point |
 
 ## Running tests
 
