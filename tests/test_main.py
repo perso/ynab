@@ -306,6 +306,7 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
             )
 
         self.assertIn("FI111", str(ctx.exception))
+        self.assertIn("--dedup", str(ctx.exception))
 
     def test_uses_global_budget_id_when_account_budget_id_absent(self):
         """budget_id absent from accounts.toml falls back to global_budget_id."""
@@ -501,40 +502,73 @@ class TestConvertBankTransactionsWithDedupAndUpload(unittest.TestCase):
 
 class TestRunApp(unittest.TestCase):
     @patch("ynab.main.convert_bank_transactions")
-    def test_run_app_calls_convert(self, mock_convert):
-        from ynab.main import run_app
+    def test_run_app_calls_convert_with_defaults(self, mock_convert):
+        from ynab.main import run_app, _CONFIG_DIR
         with patch.object(sys, "argv", ["ynab"]):
             run_app()
-        mock_convert.assert_called_once()
+        mock_convert.assert_called_once_with(
+            input_dir=str(_CONFIG_DIR / "input"),
+            output_dir=str(_CONFIG_DIR / "output"),
+            dedup_enabled=False,
+            upload_enabled=False,
+            global_budget_id=None,
+        )
 
     @patch("ynab.main.convert_bank_transactions")
-    def test_run_app_passes_file_and_account(self, mock_convert):
+    def test_run_app_passes_flags(self, mock_convert):
         from ynab.main import run_app
-        with patch.object(sys, "argv", ["ynab", "--file", "/tmp/export.csv", "--account", "FI1234"]):
+        with patch.object(sys, "argv", [
+            "ynab",
+            "--input-dir", "/tmp/in",
+            "--output-dir", "/tmp/out",
+            "--upload",
+            "--dedup",
+            "--budget-id", "b-uuid",
+        ]):
             run_app()
-        _, kwargs = mock_convert.call_args
-        self.assertEqual(kwargs["file_path"], "/tmp/export.csv")
-        self.assertEqual(kwargs["account_no"], "FI1234")
+        mock_convert.assert_called_once_with(
+            input_dir="/tmp/in",
+            output_dir="/tmp/out",
+            dedup_enabled=True,
+            upload_enabled=True,
+            global_budget_id="b-uuid",
+        )
 
 
-class TestConvertBankTransactionsFileOverride(unittest.TestCase):
-    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
-    def test_file_and_account_bypass_form_file_paths(self, _mock_cfg):
-        temp_dir = mkdtemp()
-        input_file = f"{temp_dir}/my_export.csv"
-        _write_input_csv(input_file, [
-            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"8 588,83";"Toteutunut";"Ei"',
-        ])
+class TestRunInit(unittest.TestCase):
+    def test_init_creates_directories_and_template(self):
+        from importlib.resources import files
+        from ynab.main import run_init
+        expected_template = files("ynab.templates").joinpath("accounts.toml.example").read_text(encoding="utf-8")
+        with patch("ynab.main._CONFIG_DIR") as mock_dir:
+            mock_dir.mkdir = unittest.mock.MagicMock()
+            input_dir = unittest.mock.MagicMock()
+            output_dir = unittest.mock.MagicMock()
+            accounts_path = unittest.mock.MagicMock()
+            accounts_path.exists.return_value = False
+            mock_dir.__truediv__ = lambda self, key: {
+                "input": input_dir,
+                "output": output_dir,
+                "accounts.toml": accounts_path,
+            }[key]
+            run_init()
+        mock_dir.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+        input_dir.mkdir.assert_called_once_with(exist_ok=True)
+        output_dir.mkdir.assert_called_once_with(exist_ok=True)
+        accounts_path.write_text.assert_called_once_with(expected_template)
 
-        with patch("ynab.main.form_file_paths") as mock_form:
-            convert_bank_transactions(
-                dedup_enabled=False,
-                upload_enabled=False,
-                file_path=input_file,
-                account_no="FI111",
-            )
-            mock_form.assert_not_called()
-
-        # Output is written to data/output, not temp_dir — just verify form_file_paths was bypassed
-        os.remove(input_file)
-        os.removedirs(temp_dir)
+    def test_init_skips_existing_accounts_toml(self):
+        from ynab.main import run_init
+        with patch("ynab.main._CONFIG_DIR") as mock_dir:
+            mock_dir.mkdir = unittest.mock.MagicMock()
+            input_dir = unittest.mock.MagicMock()
+            output_dir = unittest.mock.MagicMock()
+            accounts_path = unittest.mock.MagicMock()
+            accounts_path.exists.return_value = True
+            mock_dir.__truediv__ = lambda self, key: {
+                "input": input_dir,
+                "output": output_dir,
+                "accounts.toml": accounts_path,
+            }[key]
+            run_init()
+        accounts_path.write_text.assert_not_called()
