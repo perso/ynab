@@ -6,14 +6,13 @@ from typing import List
 from unittest.mock import patch
 
 from ynab.bank.transaction import BankTransaction
-from ynab.main import convert_bank_transactions, fetch_transactions
+from ynab.main import convert_bank_transactions
 from ynab.utilities.config_util import AccountConfig
 from ynab.utilities.fs_util import FilePathMapping
 from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabTransaction
 
 _ACCOUNT_CONFIG_SIMPLE = {"FI111": AccountConfig("Budget", None, None)}
 _ACCOUNT_CONFIG_DEDUP = {"FI111": AccountConfig("Budget", "b1", "a1")}
-_ENV_FETCH = {"YNAB_BUDGET_ID": "test-budget-id"}
 _ENV_DEDUP = {"YNAB_DEDUP_ENABLED": "true"}
 _ENV_NO_DEDUP = {"YNAB_DEDUP_ENABLED": "", "YNAB_UPLOAD_ENABLED": ""}
 _ENV_UPLOAD = {"YNAB_UPLOAD_ENABLED": "true", "YNAB_DEDUP_ENABLED": ""}
@@ -482,25 +481,3 @@ class TestRunApp(unittest.TestCase):
         mock_convert.assert_called_once()
 
 
-class TestFetchTransactions(unittest.TestCase):
-    @patch.dict(os.environ, _ENV_FETCH)
-    @patch("ynab.main.YnabApiClient.get_transactions")
-    @patch("ynab.main.read_credentials_file")
-    def test_calls_api_with_credentials(self, mock_credentials, mock_get_transactions):
-        mock_credentials.return_value = "test_token"
-        mock_get_transactions.return_value = _EMPTY_RESPONSE
-        fetch_transactions()
-        mock_credentials.assert_called_once()
-        mock_get_transactions.assert_called_once()
-
-    @patch.dict(os.environ, _ENV_FETCH)
-    @patch("ynab.main.YnabApiClient.get_transactions")
-    @patch("ynab.main.read_credentials_file")
-    def test_logs_each_transaction(self, mock_credentials, mock_get_transactions):
-        mock_credentials.return_value = "test_token"
-        mock_get_transactions.return_value = TransactionsResponse(
-            transactions=["tx1", "tx2"], server_knowledge=0  # type: ignore[list-item]
-        )
-        with patch("ynab.main.log") as mock_log:
-            fetch_transactions()
-        self.assertEqual(mock_log.info.call_count, 2)

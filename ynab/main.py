@@ -2,7 +2,7 @@
 
 import logging
 import os
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -16,7 +16,6 @@ from ynab.bank.transaction_writer import TransactionWriter
 from ynab.budget_service import BudgetService
 from ynab.utilities.config_util import read_accounts_config, read_credentials_file
 from ynab.utilities.fs_util import form_file_paths
-from ynab.ynab_api.ynab_api_client import YnabApiClient
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
 
 load_dotenv()
@@ -24,17 +23,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-_SINCE_DATE = date(2023, 4, 20)
 _DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-
-
-def fetch_transactions() -> None:
-    """Fetch and log recent transactions from the YNAB API."""
-    token = read_credentials_file()
-    budget_id = os.environ["YNAB_BUDGET_ID"]
-    response = YnabApiClient.get_transactions(token, budget_id, _SINCE_DATE)
-    for t in response.transactions:
-        log.info(t)
 
 
 def convert_bank_transactions(
