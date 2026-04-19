@@ -1,5 +1,7 @@
 # YNAB
 
+![CI](https://github.com/perso/ynab/actions/workflows/ci.yml/badge.svg)
+
 Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish bank format uses `;`-delimited fields, `iso-8859-1` encoding, `dd.mm.yyyy` dates, and comma decimal separators — this tool handles all of that and outputs the `Date,Payee,Memo,Amount` format that YNAB expects. Optionally uploads transactions directly to YNAB via the REST API, and optionally fetches existing transactions first to filter out duplicates.
 
 **API reference:** <https://api.ynab.com>
