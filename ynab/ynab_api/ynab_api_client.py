@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, Dict, List, NamedTuple
 
 import requests
 
@@ -13,24 +13,9 @@ class YnabTransaction(NamedTuple):
     id: str
     date: str
     amount: int
-    memo: Optional[str]
     cleared: str
-    approved: bool
-    flag_color: Optional[str]
     account_id: str
-    payee_id: Optional[str]
-    category_id: Optional[str]
-    transfer_account_id: Optional[str]
-    transfer_transaction_id: Optional[str]
-    matched_transaction_id: Optional[str]
-    import_id: Optional[str]
-    import_payee_name: Optional[str]
-    import_payee_name_original: Optional[str]
-    debt_transaction_type: Optional[str]
     deleted: bool
-    account_name: str
-    payee_name: Optional[str]
-    category_name: Optional[str]
 
 
 class TransactionsResponse(NamedTuple):
