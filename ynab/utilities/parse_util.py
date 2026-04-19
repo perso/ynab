@@ -19,9 +19,7 @@ def parse_required_amount(float_string: str) -> float:
     """Parse a required Finnish amount string (comma decimal) into a float; raises ValueError if empty."""
     if float_string == "":
         raise ValueError("Amount field must not be empty.")
-    result = parse_amount_sign_leading(float_string)
-    assert result is not None
-    return result
+    return float(float_string.replace(_DECIMAL_SEPARATOR, ".").replace(" ", ""))
 
 
 def parse_amount_sign_leading(float_string: str) -> Optional[float]:
