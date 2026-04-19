@@ -1,4 +1,5 @@
 import os
+import sys
 import unittest
 from datetime import date
 from tempfile import mkdtemp
@@ -502,5 +503,38 @@ class TestRunApp(unittest.TestCase):
     @patch("ynab.main.convert_bank_transactions")
     def test_run_app_calls_convert(self, mock_convert):
         from ynab.main import run_app
-        run_app()
+        with patch.object(sys, "argv", ["ynab"]):
+            run_app()
         mock_convert.assert_called_once()
+
+    @patch("ynab.main.convert_bank_transactions")
+    def test_run_app_passes_file_and_account(self, mock_convert):
+        from ynab.main import run_app
+        with patch.object(sys, "argv", ["ynab", "--file", "/tmp/export.csv", "--account", "FI1234"]):
+            run_app()
+        _, kwargs = mock_convert.call_args
+        self.assertEqual(kwargs["file_path"], "/tmp/export.csv")
+        self.assertEqual(kwargs["account_no"], "FI1234")
+
+
+class TestConvertBankTransactionsFileOverride(unittest.TestCase):
+    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    def test_file_and_account_bypass_form_file_paths(self, _mock_cfg):
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/my_export.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"8 588,83";"Toteutunut";"Ei"',
+        ])
+
+        with patch("ynab.main.form_file_paths") as mock_form:
+            convert_bank_transactions(
+                dedup_enabled=False,
+                upload_enabled=False,
+                file_path=input_file,
+                account_no="FI111",
+            )
+            mock_form.assert_not_called()
+
+        # Output is written to data/output, not temp_dir — just verify form_file_paths was bypassed
+        os.remove(input_file)
+        os.removedirs(temp_dir)

@@ -1,5 +1,6 @@
 """Entry point for the YNAB bank import tool."""
 
+import argparse
 import logging
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ from ynab.bank.transaction_reader import read_transactions
 from ynab.bank.transaction_writer import write_transactions
 from ynab.budget_service import BudgetService
 from ynab.utilities.config_util import read_accounts_config, read_credentials_file
-from ynab.utilities.fs_util import form_file_paths
+from ynab.utilities.fs_util import FilePathMapping, form_file_paths
 from ynab.ynab_api.ynab_api_client import TransactionsResponse
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
 
@@ -31,6 +32,8 @@ def convert_bank_transactions(
     dedup_enabled: bool = False,
     upload_enabled: bool = False,
     global_budget_id: Optional[str] = None,
+    file_path: Optional[str] = None,
+    account_no: Optional[str] = None,
 ) -> None:
     """Convert Finnish bank CSV exports to YNAB import CSVs.
 
@@ -55,11 +58,17 @@ def convert_bank_transactions(
     token: Optional[str] = read_credentials_file() if need_api else None
     budget_service: Optional[BudgetService] = budget_service_factory(token) if need_api else None  # type: ignore[arg-type]
 
-    mappings = form_file_paths(
-        input_dir=str(_DATA_DIR / "input"),
-        output_dir=str(_DATA_DIR / "output"),
-        accountno_budget_map={k: v.budget_name for k, v in account_configs.items()},
-    )
+    if file_path is not None and account_no is not None:
+        cfg_for_file = account_configs[account_no]
+        stem = Path(file_path).stem
+        output_path = str(_DATA_DIR / "output" / f"{cfg_for_file.budget_name}_{stem}.csv")
+        mappings = [FilePathMapping(account_no, file_path, output_path)]
+    else:
+        mappings = form_file_paths(
+            input_dir=str(_DATA_DIR / "input"),
+            output_dir=str(_DATA_DIR / "output"),
+            accountno_budget_map={k: v.budget_name for k, v in account_configs.items()},
+        )
 
     for mapping in mappings:
         log.info("%s -> %s", mapping.input_path, mapping.output_path)
@@ -107,12 +116,22 @@ def convert_bank_transactions(
 
 def run_app() -> None:
     load_dotenv()
-    
+
+    parser = argparse.ArgumentParser(description="Convert Finnish bank CSV exports to YNAB import CSVs.")
+    parser.add_argument("--file", dest="file_path", metavar="PATH", help="Path to a bank export CSV")
+    parser.add_argument("--account", metavar="ACCOUNT_NO", help="Account number matching an entry in accounts.toml")
+    args = parser.parse_args()
+
+    if bool(args.file_path) != bool(args.account):
+        parser.error("--file and --account must be used together")
+
     convert_bank_transactions(
         accounts_config_path=os.environ.get("YNAB_ACCOUNTS_CONFIG"),
         dedup_enabled=os.environ.get("YNAB_DEDUP_ENABLED", "").lower() == "true",
         upload_enabled=os.environ.get("YNAB_UPLOAD_ENABLED", "").lower() == "true",
         global_budget_id=os.environ.get("YNAB_BUDGET_ID"),
+        file_path=args.file_path,
+        account_no=args.account,
     )
 
 
