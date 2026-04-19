@@ -9,8 +9,9 @@ from ynab.bank.transaction import BankTransaction
 
 def to_api_payload(txn: BankTransaction, account_id: str) -> Dict[str, Any]:
     milliunits = to_milliunits(txn.amount)
+    balance_part = f"|{to_milliunits(txn.balance)}" if txn.balance is not None else ""
     import_id = sha256(
-        f"{txn.date.isoformat()}|{milliunits}|{txn.payee}".encode()
+        f"{txn.date.isoformat()}|{milliunits}|{txn.payee}{balance_part}".encode()
     ).hexdigest()[:36]
     return {
         "account_id": account_id,

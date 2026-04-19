@@ -13,9 +13,11 @@ _TXN = BankTransaction(
     sub_category="Sub",
     payee="Coffee Shop",
     amount=-5.50,
-    balance=None,
+    balance=100.00,
     status=_CLEARED,
 )
+
+_TXN_NO_BALANCE = _TXN._replace(balance=None)
 
 
 class TestToApiPayload(unittest.TestCase):
@@ -58,12 +60,27 @@ class TestToApiPayload(unittest.TestCase):
             to_api_payload(other, "acc-123")["import_id"],
         )
 
-    def test_import_id_matches_expected_hash(self):
+    def test_import_id_differs_by_balance(self):
+        other = _TXN._replace(balance=200.00)
+        self.assertNotEqual(
+            to_api_payload(_TXN, "acc-123")["import_id"],
+            to_api_payload(other, "acc-123")["import_id"],
+        )
+
+    def test_import_id_matches_expected_hash_with_balance(self):
+        milliunits = -5500
+        balance_milliunits = 100000
+        expected = sha256(
+            f"2023-04-20|{milliunits}|Coffee Shop|{balance_milliunits}".encode()
+        ).hexdigest()[:36]
+        self.assertEqual(to_api_payload(_TXN, "acc-123")["import_id"], expected)
+
+    def test_import_id_matches_expected_hash_without_balance(self):
         milliunits = -5500
         expected = sha256(
             f"2023-04-20|{milliunits}|Coffee Shop".encode()
         ).hexdigest()[:36]
-        self.assertEqual(to_api_payload(_TXN, "acc-123")["import_id"], expected)
+        self.assertEqual(to_api_payload(_TXN_NO_BALANCE, "acc-123")["import_id"], expected)
 
 
 class TestToApiPayloads(unittest.TestCase):

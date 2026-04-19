@@ -1,4 +1,15 @@
-"""Reader for Finnish bank CSV exports."""
+"""Reader for Finnish bank CSV exports.
+
+CSV columns (semicolon-delimited, iso-8859-1 encoding):
+  Päivä          – transaction date (dd.mm.yyyy)
+  Kategoria      – bank-assigned category (Finnish label, unrelated to YNAB categories)
+  Alaluokka      – bank-assigned subcategory
+  Saaja/Maksaja  – payee / counterparty name
+  Määrä          – amount (comma decimal; negative = debit)
+  Saldo          – running account balance after transaction; absent for pending rows
+  Tila           – execution status: "Toteutunut" (executed) or "Odottaa" (pending)
+  Tarkastettu    – user convenience checkmark in the bank app: "Kyllä" (yes) or "Ei" (no)
+"""
 
 import csv
 from pathlib import Path
@@ -9,9 +20,14 @@ from ynab.utilities.parse_util import parse_date, parse_amount_sign_leading, par
 
 _ENCODING = "iso-8859-1"
 _DELIMITER = ";"
-_STATUS_EXECUTED = "Toteutunut"
-_STATUS_YES = "Kyllä"
-_STATUS_NO = "Ei"
+
+# Tila column values
+_TILA_TOTEUTUNUT = "Toteutunut"  # transaction has been executed / cleared by the bank
+_TILA_ODOTTAA = "Odottaa"        # transaction is pending / waiting to settle
+
+# Tarkastettu column values (user-placed checkmark in the bank app, no financial meaning)
+_TARKASTETTU_KYLLA = "Kyllä"
+_TARKASTETTU_EI = "Ei"
 
 
 class TransactionReader:
@@ -54,18 +70,16 @@ class TransactionReader:
         return transactions
 
     @staticmethod
-    def _resolve_status(status: str, check: str) -> TransactionStatus:
-        """Resolve transaction status from the two Finnish bank status columns.
+    def _resolve_status(tila: str, tarkastettu: str) -> TransactionStatus:
+        """Derive TransactionStatus from the Tila and Tarkastettu CSV columns.
 
-        Args:
-            status: First status column (e.g. ``"Toteutunut"`` or ``"Odottaa"``).
-            check: Second status column (``"Kyllä"`` or ``"Ei"``).
-
-        Returns:
-            Corresponding ``TransactionStatus``.
+        Tarkastettu="Kyllä" is treated as RECONCILED by convention: the user
+        marking a transaction as checked in the bank app signals that it has
+        already been reconciled in YNAB.
         """
-        if status == _STATUS_EXECUTED and check == _STATUS_YES:
+        if tila == _TILA_TOTEUTUNUT and tarkastettu == _TARKASTETTU_KYLLA:
             return TransactionStatus.RECONCILED
-        if status == _STATUS_EXECUTED and check == _STATUS_NO:
+        if tila == _TILA_TOTEUTUNUT and tarkastettu == _TARKASTETTU_EI:
             return TransactionStatus.CLEARED
+        # Odottaa (pending) and any unexpected value
         return TransactionStatus.PENDING
