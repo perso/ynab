@@ -11,32 +11,48 @@ Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish 
 1. Install dependencies:
    ```bash
    poetry install
-   source .venv/bin/activate
    ```
 
-2. Place bank export CSVs in `data/input/`. Filenames must follow the format `<account_no>_<anything>.csv`.
-
-3. Copy `accounts.toml.example` to `accounts.toml` and fill in your accounts:
+2. Copy `accounts.toml.example` to `accounts.toml` and fill in your accounts:
    ```toml
    [accounts.FI1234567890]
    budget_name = "MyBudget"
    ```
 
+3. Place bank export CSVs in an input directory. Filenames must follow the format `<account_no>_<anything>.csv`.
+
 4. Run the converter:
    ```bash
-   poetry run python -m ynab.main
+   poetry run ynab --input-dir path/to/exports --output-dir path/to/output
    ```
-   Output CSVs are written to `data/output/`.
+
+   All flags are optional — omitting `--input-dir` and `--output-dir` defaults to `./input` and `./output` relative to the current working directory.
 
 5. *(Optional)* Enable direct upload to YNAB — see **Direct upload** below.
 
 6. *(Optional)* Enable duplicate filtering — see **Deduplication** below.
 
+## CLI reference
+
+```
+usage: ynab [-h] [--input-dir PATH] [--output-dir PATH] [--accounts PATH]
+            [--upload] [--dedup] [--budget-id UUID]
+
+options:
+  --input-dir PATH   directory containing bank export CSVs (default: ./input)
+  --output-dir PATH  directory for YNAB import CSVs (default: ./output)
+  --accounts PATH    path to accounts.toml (default: ./accounts.toml)
+  --upload           upload transactions directly to the YNAB API
+  --dedup            fetch existing YNAB transactions and filter duplicates
+  --budget-id UUID   global YNAB budget ID; per-account value in accounts.toml
+                     takes precedence
+```
+
 ## Direct upload
 
-When `YNAB_UPLOAD_ENABLED=true` the tool POSTs transactions directly to the
-YNAB API after processing, eliminating the manual CSV import step in the YNAB
-app. Output CSVs are still written as before.
+When `--upload` is passed the tool POSTs transactions directly to the YNAB API
+after processing, eliminating the manual CSV import step in the YNAB app.
+Output CSVs are still written as before.
 
 Each transaction is assigned a deterministic `import_id` derived from its date,
 amount, payee, and running balance. YNAB uses this to silently skip duplicates
@@ -46,16 +62,11 @@ if the tool is run again with the same input, making repeated runs safe.
 
 1. Add your YNAB API token to `~/.config/ynab/credentials`.
 
-2. Copy `.env.example` to `.env` and set:
-   ```
-   YNAB_UPLOAD_ENABLED=true
-   ```
-
-3. Add `budget_id` and `account_id` to each account in `accounts.toml`:
+2. Add `budget_id` and `account_id` to each account in `accounts.toml`:
    ```toml
    [accounts.FI1234567890]
    budget_name = "MyBudget"
-   budget_id   = "<budget-uuid>"   # optional if YNAB_BUDGET_ID is set
+   budget_id   = "<budget-uuid>"   # optional if --budget-id is passed
    account_id  = "<account-uuid>"
    ```
 
@@ -69,7 +80,7 @@ if the tool is run again with the same input, making repeated runs safe.
 
 ## Deduplication
 
-When `YNAB_DEDUP_ENABLED=true` the tool fetches transactions from the YNAB API
+When `--dedup` is passed the tool fetches transactions from the YNAB API
 before writing each output file and removes any bank rows that already appear in
 YNAB (whether imported previously or entered manually).
 
@@ -82,17 +93,11 @@ tolerance, making each run idempotent for the same input data.
 
 1. Add your YNAB API token to `~/.config/ynab/credentials`.
 
-2. Copy `.env.example` to `.env` and set:
-   ```
-   YNAB_BUDGET_ID=<your-budget-uuid>
-   YNAB_DEDUP_ENABLED=true
-   ```
-
-3. Add `budget_id` and `account_id` to each account in `accounts.toml`:
+2. Add `budget_id` and `account_id` to each account in `accounts.toml`:
    ```toml
    [accounts.FI1234567890]
    budget_name = "MyBudget"
-   budget_id   = "<budget-uuid>"   # optional if YNAB_BUDGET_ID is set
+   budget_id   = "<budget-uuid>"   # optional if --budget-id is passed
    account_id  = "<account-uuid>"
    ```
 
@@ -123,8 +128,8 @@ removed but OAuth support is left as future work.
 | Module | Description |
 | --- | --- |
 | `ynab/bank/transaction.py` | `BankTransaction` NamedTuple and `TransactionStatus` enum |
-| `ynab/bank/transaction_reader.py` | `TransactionReader` — parses Finnish bank CSVs into `BankTransaction` lists |
-| `ynab/bank/transaction_writer.py` | `TransactionWriter` — writes YNAB import CSVs |
+| `ynab/bank/transaction_reader.py` | Parses Finnish bank CSVs into `BankTransaction` lists |
+| `ynab/bank/transaction_writer.py` | Writes YNAB import CSVs |
 | `ynab/bank/transaction_filters.py` | `filter_unchecked_transactions` — keeps only CLEARED transactions |
 | `ynab/bank/duplicate_filter.py` | `filter_already_in_ynab` — removes bank rows already present in YNAB |
 | `ynab/bank/transaction_uploader.py` | `to_api_payloads` — converts `BankTransaction` lists to YNAB API payloads |
@@ -148,15 +153,8 @@ poetry run pytest tests/ --cov=ynab --cov-report=term-missing
 
 ## Linting
 
-Check for issues:
-
 ```bash
 poetry run ruff check .
-```
-
-Fix auto-fixable issues:
-
-```bash
 poetry run ruff check --fix .
 ```
 
