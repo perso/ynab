@@ -31,7 +31,7 @@ class TestTransactionReader(unittest.TestCase):
             f.write(self.input_csv.encode('iso-8859-1'))
             filename = f.name
 
-        transactions = read_transactions(f.name)
+        transactions = read_transactions(filename)
         self.assertEqual(self.expected_transactions, transactions)
 
         os.remove(filename)

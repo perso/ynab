@@ -9,7 +9,7 @@ class TransactionStatus(Enum):
     """Status of a bank transaction as reported by the Finnish bank export.
 
     Derived from two CSV columns: Tila (execution status) and Tarkastettu
-    (user checkmark). See TransactionReader._resolve_status for the mapping.
+    (user checkmark). See transaction_reader._resolve_status for the mapping.
     """
 
     CLEARED = "Cleared"      # Toteutunut + not checked: executed, ready to import
