@@ -1,11 +1,25 @@
 """Filter bank transactions that already exist in YNAB."""
 
 import logging
-from datetime import date, datetime
-from typing import Iterable, List, Optional
+from datetime import date, datetime, timedelta
+from typing import Iterable, List, Protocol
 
 from ynab.bank.transaction import BankTransaction
-from ynab.ynab_api.ynab_api_client import YnabTransaction
+
+
+class _YnabTransactionLike(Protocol):
+    @property
+    def id(self) -> str: ...
+    @property
+    def date(self) -> str: ...
+    @property
+    def amount(self) -> int: ...
+    @property
+    def cleared(self) -> str: ...
+    @property
+    def account_id(self) -> str: ...
+    @property
+    def deleted(self) -> bool: ...
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +35,7 @@ def to_milliunits(amount: float) -> int:
 
 def filter_already_in_ynab(
     bank_transactions: List[BankTransaction],
-    ynab_transactions: Iterable[YnabTransaction],
+    ynab_transactions: Iterable[_YnabTransactionLike],
     account_id: str,
     date_tolerance_days: int = DEFAULT_DATE_TOLERANCE_DAYS,
 ) -> List[BankTransaction]:
@@ -55,24 +69,15 @@ def filter_already_in_ynab(
     for bt in sorted(bank_transactions, key=lambda t: (t.date, t.amount, t.payee)):
         amt_mu = to_milliunits(bt.amount)
         pool = by_amount.get(amt_mu, [])
-        best_idx: Optional[int] = None
-        best_delta: Optional[int] = None
-        best_ynab_date: Optional[date] = None
-        for i, (ynab_date, _ynab_id) in enumerate(pool):
-            delta = abs((ynab_date - bt.date).days)
-            if delta > date_tolerance_days:
-                continue
-            if (
-                best_delta is None
-                or delta < best_delta
-                or (delta == best_delta and best_ynab_date is not None and ynab_date < best_ynab_date)
-            ):
-                best_idx = i
-                best_delta = delta
-                best_ynab_date = ynab_date
-        if best_idx is None:
+        candidates = [
+            (abs((ynab_date - bt.date).days), ynab_date, i)
+            for i, (ynab_date, _) in enumerate(pool)
+            if abs((ynab_date - bt.date).days) <= date_tolerance_days
+        ]
+        if not candidates:
             kept.append(bt)
         else:
+            best_idx = min(candidates)[2]
             pool.pop(best_idx)
 
     filtered = len(bank_transactions) - len(kept)
@@ -81,3 +86,8 @@ def filter_already_in_ynab(
         len(bank_transactions), filtered, len(kept),
     )
     return kept
+
+
+def derive_since_date(transactions: List[BankTransaction], tolerance_days: int) -> date:
+    """Return the earliest transaction date minus tolerance, for querying the YNAB API."""
+    return min(t.date for t in transactions) - timedelta(days=tolerance_days)

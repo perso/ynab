@@ -30,56 +30,47 @@ _TARKASTETTU_KYLLA = "Kyllä"
 _TARKASTETTU_EI = "Ei"
 
 
-class TransactionReader:
-    def __init__(self, file_name: Union[str, Path], header: bool = True):
-        self.file_name = Path(file_name)
-        self.header = header
+def read_transactions(file_name: Union[str, Path], header: bool = True) -> List[BankTransaction]:
+    """Read transactions from a Finnish bank CSV export."""
+    file_path = Path(file_name)
+    transactions = []
+    with open(file_path, encoding=_ENCODING, newline="") as csvfile:
+        reader = csv.reader(csvfile, delimiter=_DELIMITER)
+        if header:
+            next(reader, None)
+        for row_num, row in enumerate(reader, start=2):
+            if len(row) < 8:
+                raise ValueError(
+                    f"Expected 8 columns, got {len(row)} in row {row_num} of {file_path}"
+                )
+            try:
+                transaction = BankTransaction(
+                    date=parse_date(row[0]),
+                    category=row[1].strip(),
+                    sub_category=row[2].strip(),
+                    payee=row[3].strip(),
+                    amount=parse_required_amount(row[4]),
+                    balance=parse_amount_sign_leading(row[5]),
+                    status=_resolve_status(row[6], row[7]),
+                )
+            except ValueError as exc:
+                raise ValueError(
+                    f"Failed to parse row {row_num} in {file_path}: {exc}"
+                ) from exc
+            transactions.append(transaction)
+    return transactions
 
-    def read_transactions(self) -> List[BankTransaction]:
-        """Read transactions from the associated CSV file.
 
-        Returns:
-            Parsed list of ``BankTransaction`` objects.
+def _resolve_status(tila: str, tarkastettu: str) -> TransactionStatus:
+    """Derive TransactionStatus from the Tila and Tarkastettu CSV columns.
 
-        Raises:
-            ValueError: If a row contains an unparseable date or amount.
-        """
-        transactions = []
-
-        with open(self.file_name, encoding=_ENCODING, newline="") as csvfile:
-            reader = csv.reader(csvfile, delimiter=_DELIMITER)
-            if self.header:
-                next(reader, None)
-            for row_num, row in enumerate(reader, start=2):
-                try:
-                    transaction = BankTransaction(
-                        date=parse_date(row[0]),
-                        category=row[1].strip(),
-                        sub_category=row[2].strip(),
-                        payee=row[3].strip(),
-                        amount=parse_required_amount(row[4]),
-                        balance=parse_amount_sign_leading(row[5]),
-                        status=self._resolve_status(row[6], row[7]),
-                    )
-                except ValueError as exc:
-                    raise ValueError(
-                        f"Failed to parse row {row_num} in {self.file_name}: {exc}"
-                    ) from exc
-                transactions.append(transaction)
-
-        return transactions
-
-    @staticmethod
-    def _resolve_status(tila: str, tarkastettu: str) -> TransactionStatus:
-        """Derive TransactionStatus from the Tila and Tarkastettu CSV columns.
-
-        Tarkastettu="Kyllä" is treated as RECONCILED by convention: the user
-        marking a transaction as checked in the bank app signals that it has
-        already been reconciled in YNAB.
-        """
-        if tila == _TILA_TOTEUTUNUT and tarkastettu == _TARKASTETTU_KYLLA:
-            return TransactionStatus.RECONCILED
-        if tila == _TILA_TOTEUTUNUT and tarkastettu == _TARKASTETTU_EI:
-            return TransactionStatus.CLEARED
-        # Odottaa (pending) and any unexpected value
-        return TransactionStatus.PENDING
+    Tarkastettu="Kyllä" is treated as RECONCILED by convention: the user
+    marking a transaction as checked in the bank app signals that it has
+    already been reconciled in YNAB.
+    """
+    if tila == _TILA_TOTEUTUNUT and tarkastettu == _TARKASTETTU_KYLLA:
+        return TransactionStatus.RECONCILED
+    if tila == _TILA_TOTEUTUNUT and tarkastettu == _TARKASTETTU_EI:
+        return TransactionStatus.CLEARED
+    # Odottaa (pending) and any unexpected value
+    return TransactionStatus.PENDING

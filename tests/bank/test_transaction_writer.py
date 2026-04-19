@@ -4,7 +4,7 @@ import unittest
 from datetime import date
 
 from ynab.bank.transaction import BankTransaction, TransactionStatus
-from ynab.bank.transaction_writer import TransactionWriter
+from ynab.bank.transaction_writer import write_transactions
 
 
 class TestTransactionReader(unittest.TestCase):
@@ -30,7 +30,7 @@ class TestTransactionReader(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False) as f:
             filename = f.name
 
-        TransactionWriter(filename).write_transactions(self.transactions)
+        write_transactions(filename, self.transactions)
 
         with open(filename, 'r') as f:
             lines = f.readlines()
@@ -44,8 +44,8 @@ class TestTransactionReader(unittest.TestCase):
 
         tx1 = BankTransaction(date(2023, 4, 20), '', '', 'Shop A', -10.0, None, TransactionStatus.CLEARED)
         tx2 = BankTransaction(date(2023, 4, 21), '', '', 'Shop B', -5.0, None, TransactionStatus.CLEARED)
-        TransactionWriter(filename).write_transactions([tx1])
-        TransactionWriter(filename).write_transactions([tx2])
+        write_transactions(filename, [tx1])
+        write_transactions(filename, [tx2])
 
         with open(filename, 'r') as f:
             lines = f.readlines()
@@ -60,7 +60,7 @@ class TestTransactionReader(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False) as f:
             filename = f.name
 
-        TransactionWriter(filename).write_transactions([])
+        write_transactions(filename, [])
 
         with open(filename, 'r') as f:
             lines = f.readlines()
