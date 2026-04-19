@@ -1,6 +1,6 @@
 # YNAB
 
-Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish bank format uses `;`-delimited fields, `iso-8859-1` encoding, `dd.mm.yyyy` dates, and comma decimal separators — this tool handles all of that and outputs the `Date,Payee,Memo,Amount` format that YNAB expects. Optionally fetches existing transactions from the YNAB REST API to filter out duplicates before writing output.
+Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish bank format uses `;`-delimited fields, `iso-8859-1` encoding, `dd.mm.yyyy` dates, and comma decimal separators — this tool handles all of that and outputs the `Date,Payee,Memo,Amount` format that YNAB expects. Optionally uploads transactions directly to YNAB via the REST API, and optionally fetches existing transactions first to filter out duplicates.
 
 **API reference:** <https://api.ynab.com>
 
@@ -26,7 +26,44 @@ Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish 
    ```
    Output CSVs are written to `data/output/`.
 
-5. *(Optional)* Enable duplicate filtering — see **Deduplication** below.
+5. *(Optional)* Enable direct upload to YNAB — see **Direct upload** below.
+
+6. *(Optional)* Enable duplicate filtering — see **Deduplication** below.
+
+## Direct upload
+
+When `YNAB_UPLOAD_ENABLED=true` the tool POSTs transactions directly to the
+YNAB API after processing, eliminating the manual CSV import step in the YNAB
+app. Output CSVs are still written as before.
+
+Each transaction is assigned a deterministic `import_id` derived from its date,
+amount, payee, and running balance. YNAB uses this to silently skip duplicates
+if the tool is run again with the same input, making repeated runs safe.
+
+**Configuration:**
+
+1. Add your YNAB API token to `~/.config/ynab/credentials`.
+
+2. Copy `.env.example` to `.env` and set:
+   ```
+   YNAB_UPLOAD_ENABLED=true
+   ```
+
+3. Add `budget_id` and `account_id` to each account in `accounts.toml`:
+   ```toml
+   [accounts.FI1234567890]
+   budget_name = "MyBudget"
+   budget_id   = "<budget-uuid>"   # optional if YNAB_BUDGET_ID is set
+   account_id  = "<account-uuid>"
+   ```
+
+   Accounts missing `account_id` or a resolvable `budget_id` are skipped with
+   a warning and their CSV output is still written.
+
+> **Recommended:** enable **Deduplication** alongside direct upload. Without it,
+> transactions entered manually in YNAB may be imported again because
+> `import_id` only guards against re-runs of this tool, not against duplicates
+> from other sources.
 
 ## Deduplication
 
@@ -88,6 +125,7 @@ removed but OAuth support is left as future work.
 | `ynab/bank/transaction_writer.py` | `TransactionWriter` — writes YNAB import CSVs |
 | `ynab/bank/transaction_filters.py` | `filter_unchecked_transactions` — keeps only CLEARED transactions |
 | `ynab/bank/duplicate_filter.py` | `filter_already_in_ynab` — removes bank rows already present in YNAB |
+| `ynab/bank/transaction_uploader.py` | `to_api_payloads` — converts `BankTransaction` lists to YNAB API payloads |
 | `ynab/utilities/parse_util.py` | Date and amount parsing helpers for the Finnish CSV format |
 | `ynab/utilities/fs_util.py` | `form_file_paths` — maps input files to output paths via the account map |
 | `ynab/utilities/config_util.py` | `read_credentials_file`, `read_accounts_config` — credentials and TOML config loading |

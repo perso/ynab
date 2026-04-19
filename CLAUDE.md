@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-This is a Python tool that reads bank transaction exports (Finnish bank CSV format) and converts them into YNAB-compatible CSV imports, with an optional YNAB API client for fetching existing transactions.
+This is a Python tool that reads bank transaction exports (Finnish bank CSV format) and converts them into YNAB-compatible CSV imports. Optionally uploads transactions directly to YNAB via the REST API, and optionally fetches existing transactions first to filter out duplicates.
 
 **Data flow:**
 1. `TransactionReader` reads Finnish bank CSVs (`;`-delimited, `iso-8859-1` encoded, `dd.mm.yyyy` dates, comma-decimal amounts) into `BankTransaction` named tuples
@@ -22,9 +22,16 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - `YnabBudgetService` fetches transactions and `filter_already_in_ynab` removes matching rows
 - `date_tolerance_days` defaults to `DEFAULT_DATE_TOLERANCE_DAYS` (3) but can be overridden per account in `accounts.toml` (useful for credit cards with posting lag)
 
+**Upload flow (optional, `YNAB_UPLOAD_ENABLED=true`):**
+- Runs after filter/dedup; calls `YnabBudgetService.create_transactions` for each account that has `budget_id` and `account_id` configured (skips with a warning otherwise)
+- `to_api_payloads` in `transaction_uploader.py` converts `BankTransaction` objects to API dicts; each gets a deterministic `import_id` = `sha256("{date}|{milliunits}|{payee}|{balance_milliunits}").hexdigest()[:36]`
+- `import_id` makes repeated runs idempotent: YNAB silently skips transactions it has already seen
+- Output CSVs are still written regardless of upload status
+- Credentials are read once when either dedup or upload is enabled
+
 **Module layout:**
-- `ynab/bank/` — transaction model, reader, writer, filters
-- `ynab/ynab_api/` — YNAB REST API client (read transactions)
+- `ynab/bank/` — transaction model, reader, writer, filters, API payload conversion (`transaction_uploader.py`)
+- `ynab/ynab_api/` — YNAB REST API client (read and create transactions)
 - `ynab/utilities/` — CSV/date/amount parsing, filesystem helpers, credentials and TOML config loading
 - `tests/` — mirrors `ynab/` structure
 
