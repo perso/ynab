@@ -2,8 +2,10 @@ import os
 import unittest
 from datetime import date
 from tempfile import mkdtemp
+from typing import List
 from unittest.mock import patch
 
+from ynab.bank.transaction import BankTransaction
 from ynab.main import convert_bank_transactions, fetch_transactions
 from ynab.utilities.config_util import AccountConfig
 from ynab.utilities.fs_util import FilePathMapping
@@ -13,7 +15,8 @@ _ACCOUNT_CONFIG_SIMPLE = {"FI111": AccountConfig("Budget", None, None)}
 _ACCOUNT_CONFIG_DEDUP = {"FI111": AccountConfig("Budget", "b1", "a1")}
 _ENV_FETCH = {"YNAB_BUDGET_ID": "test-budget-id"}
 _ENV_DEDUP = {"YNAB_DEDUP_ENABLED": "true"}
-_ENV_NO_DEDUP = {"YNAB_DEDUP_ENABLED": ""}
+_ENV_NO_DEDUP = {"YNAB_DEDUP_ENABLED": "", "YNAB_UPLOAD_ENABLED": ""}
+_ENV_UPLOAD = {"YNAB_UPLOAD_ENABLED": "true", "YNAB_DEDUP_ENABLED": ""}
 
 _EMPTY_RESPONSE = TransactionsResponse(transactions=[], server_knowledge=0)
 
@@ -51,11 +54,13 @@ def _make_ynab_transaction(
 
 
 class _FakeBudgetService:
-    """Test double for BudgetService — records calls and returns a preset response."""
+    """Test double for BudgetService — records calls and returns preset responses."""
 
-    def __init__(self, response: TransactionsResponse = _EMPTY_RESPONSE) -> None:
+    def __init__(self, response: TransactionsResponse = _EMPTY_RESPONSE, created_count: int = 0) -> None:
         self.response = response
+        self.created_count = created_count
         self.calls: list[tuple] = []
+        self.create_calls: list[tuple] = []
 
     def get_transactions(
         self,
@@ -64,6 +69,15 @@ class _FakeBudgetService:
     ) -> TransactionsResponse:
         self.calls.append((budget_id, since_date))
         return self.response
+
+    def create_transactions(
+        self,
+        budget_id: str,
+        account_id: str,
+        transactions: List[BankTransaction],
+    ) -> int:
+        self.create_calls.append((budget_id, account_id, transactions))
+        return self.created_count
 
 
 @patch.dict(os.environ, _ENV_NO_DEDUP)
@@ -334,6 +348,125 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
 
         self.assertEqual(len(service.calls), 1)
         budget_id_used, _ = service.calls[0]
+        self.assertEqual(budget_id_used, "env-budget-id")
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+
+class TestConvertBankTransactionsWithUpload(unittest.TestCase):
+    """Integration tests for the YNAB_UPLOAD_ENABLED path."""
+
+    def _write_input_csv(self, path: str, rows: list[str]) -> None:
+        header = '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"'
+        content = "\n".join([header] + rows)
+        with open(path, "wb") as f:
+            f.write(content.encode("iso-8859-1"))
+
+    def _run_with_fake_service(
+        self,
+        input_file: str,
+        output_file: str,
+        service: _FakeBudgetService,
+        account_config: dict,
+    ) -> None:
+        with (
+            patch("ynab.main.read_accounts_config", return_value=account_config),
+            patch("ynab.main.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.main.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(budget_service_factory=lambda _token: service)
+
+    @patch.dict(os.environ, _ENV_UPLOAD)
+    def test_create_transactions_called_with_correct_args(self):
+        service = _FakeBudgetService(created_count=1)
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        self._write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        self._run_with_fake_service(input_file, output_file, service, _ACCOUNT_CONFIG_DEDUP)
+
+        self.assertEqual(len(service.create_calls), 1)
+        budget_id, account_id, txns = service.create_calls[0]
+        self.assertEqual(budget_id, "b1")
+        self.assertEqual(account_id, "a1")
+        self.assertEqual(len(txns), 1)
+        self.assertEqual(txns[0].payee, "Shop A")
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    @patch.dict(os.environ, _ENV_UPLOAD)
+    def test_upload_skipped_when_account_config_missing_ids(self):
+        service = _FakeBudgetService()
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        self._write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        self._run_with_fake_service(input_file, output_file, service, _ACCOUNT_CONFIG_SIMPLE)
+
+        # No create call made; CSV still written
+        self.assertEqual(service.create_calls, [])
+        with open(output_file) as f:
+            lines = f.readlines()
+        self.assertEqual(len(lines), 2)
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    @patch.dict(os.environ, _ENV_UPLOAD)
+    def test_upload_not_called_when_no_transactions(self):
+        service = _FakeBudgetService()
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        # All PENDING — filtered out before upload
+        self._write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"";"Odottaa";"Ei"',
+        ])
+
+        self._run_with_fake_service(input_file, output_file, service, _ACCOUNT_CONFIG_DEDUP)
+
+        self.assertEqual(service.create_calls, [])
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    @patch.dict(os.environ, _ENV_UPLOAD)
+    @patch("ynab.main.read_credentials_file")
+    @patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE)
+    def test_credentials_loaded_when_upload_enabled(self, _mock_cfg, mock_creds):
+        mock_creds.return_value = "token"
+        with patch("ynab.main.form_file_paths", return_value=[]):
+            convert_bank_transactions()
+        mock_creds.assert_called_once()
+
+    @patch.dict(os.environ, {**_ENV_UPLOAD, "YNAB_BUDGET_ID": "env-budget-id"})
+    def test_upload_uses_global_budget_id_when_account_budget_id_absent(self):
+        account_cfg_no_budget_id = {"FI111": AccountConfig("Budget", None, "a1")}
+        service = _FakeBudgetService(created_count=1)
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        self._write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        self._run_with_fake_service(input_file, output_file, service, account_cfg_no_budget_id)
+
+        self.assertEqual(len(service.create_calls), 1)
+        budget_id_used, _, _ = service.create_calls[0]
         self.assertEqual(budget_id_used, "env-budget-id")
 
         os.remove(input_file)

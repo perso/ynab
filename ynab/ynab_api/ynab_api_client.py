@@ -3,7 +3,7 @@
 import logging
 from collections import namedtuple
 from datetime import date
-from typing import List, NamedTuple, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 import requests
 
@@ -96,3 +96,51 @@ class YnabApiClient:
         ]
         log.info("GET %s → %d transactions, server_knowledge=%d", url, len(transactions), server_knowledge)
         return TransactionsResponse(transactions=transactions, server_knowledge=server_knowledge)
+
+    @staticmethod
+    def create_transactions(
+        token: str,
+        budget_id: str,
+        transactions: List[Dict[str, Any]],
+    ) -> int:
+        """POST new transactions to the YNAB API.
+
+        Args:
+            token: YNAB personal access token.
+            budget_id: YNAB budget UUID.
+            transactions: List of transaction payload dicts ready to send.
+
+        Returns:
+            Count of newly created transactions (duplicates excluded).
+
+        Raises:
+            YnabApiError: On HTTP 429 (rate limit) or malformed response body.
+            requests.HTTPError: On other non-2xx HTTP errors.
+        """
+        url = f"{YnabApiClient.BASE_URL}/budgets/{budget_id}/transactions"
+        response = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"transactions": transactions},
+        )
+
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After", "unknown")
+            raise YnabApiError(
+                f"YNAB API rate limit reached. Retry after {retry_after} seconds."
+            )
+
+        response.raise_for_status()
+
+        try:
+            data = response.json()["data"]
+            created_ids: List[str] = data["transaction_ids"]
+            duplicate_ids: List[str] = data["duplicate_import_ids"]
+        except (KeyError, ValueError) as exc:
+            raise YnabApiError(f"Unexpected YNAB API response format: {exc}") from exc
+
+        log.info(
+            "POST %s → %d created, %d duplicates skipped",
+            url, len(created_ids), len(duplicate_ids),
+        )
+        return len(created_ids)

@@ -138,3 +138,85 @@ class TestYnabApiClient(unittest.TestCase):
 
     def test_base_url_is_current_ynab_domain(self):
         self.assertEqual(YnabApiClient.BASE_URL, "https://api.ynab.com/v1")
+
+
+def _mock_post_response(transaction_ids: list, duplicate_ids: list, status_code: int = 201) -> MagicMock:
+    mock = MagicMock()
+    mock.status_code = status_code
+    mock.json.return_value = {"data": {"transaction_ids": transaction_ids, "duplicate_import_ids": duplicate_ids, "transactions": []}}
+    mock.raise_for_status.return_value = None
+    return mock
+
+
+_SAMPLE_PAYLOAD = {
+    "account_id": "a1",
+    "date": "2023-04-20",
+    "amount": -55000,
+    "payee_name": "Coffee Shop",
+    "cleared": "cleared",
+    "approved": False,
+    "import_id": "abc123",
+}
+
+
+class TestYnabApiClientCreateTransactions(unittest.TestCase):
+    @patch("ynab.ynab_api.ynab_api_client.requests.post")
+    def test_create_transactions_returns_created_count(self, mock_post):
+        mock_post.return_value = _mock_post_response(["id1", "id2"], [])
+
+        result = YnabApiClient.create_transactions("token", "budget-id", [_SAMPLE_PAYLOAD, _SAMPLE_PAYLOAD])
+
+        self.assertEqual(result, 2)
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.post")
+    def test_create_transactions_posts_to_correct_url(self, mock_post):
+        mock_post.return_value = _mock_post_response(["id1"], [])
+
+        YnabApiClient.create_transactions("tok", "bud", [_SAMPLE_PAYLOAD])
+
+        mock_post.assert_called_once_with(
+            "https://api.ynab.com/v1/budgets/bud/transactions",
+            headers={"Authorization": "Bearer tok", "Content-Type": "application/json"},
+            json={"transactions": [_SAMPLE_PAYLOAD]},
+        )
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.post")
+    def test_create_transactions_excludes_duplicates_from_count(self, mock_post):
+        mock_post.return_value = _mock_post_response(["id1"], ["dup-import-id"])
+
+        result = YnabApiClient.create_transactions("token", "budget-id", [_SAMPLE_PAYLOAD, _SAMPLE_PAYLOAD])
+
+        self.assertEqual(result, 1)
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.post")
+    def test_create_transactions_raises_on_http_error(self, mock_post):
+        mock = MagicMock()
+        mock.status_code = 500
+        mock.raise_for_status.side_effect = requests.HTTPError("500")
+        mock_post.return_value = mock
+
+        with self.assertRaises(requests.HTTPError):
+            YnabApiClient.create_transactions("token", "budget-id", [_SAMPLE_PAYLOAD])
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.post")
+    def test_create_transactions_raises_ynab_api_error_on_429(self, mock_post):
+        mock = MagicMock()
+        mock.status_code = 429
+        mock.headers = {"Retry-After": "30"}
+        mock_post.return_value = mock
+
+        with self.assertRaises(YnabApiError) as ctx:
+            YnabApiClient.create_transactions("token", "budget-id", [_SAMPLE_PAYLOAD])
+
+        self.assertIn("30", str(ctx.exception))
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.post")
+    def test_create_transactions_raises_ynab_api_error_on_malformed_body(self, mock_post):
+        mock = MagicMock()
+        mock.status_code = 201
+        mock.raise_for_status.return_value = None
+        mock.json.return_value = {"unexpected": "shape"}
+        mock_post.return_value = mock
+
+        with self.assertRaises(YnabApiError):
+            YnabApiClient.create_transactions("token", "budget-id", [_SAMPLE_PAYLOAD])
