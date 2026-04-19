@@ -17,8 +17,6 @@ from ynab.utilities.config_util import read_accounts_config, read_credentials_fi
 from ynab.utilities.fs_util import form_file_paths
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
 
-load_dotenv()
-
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
@@ -28,14 +26,18 @@ _DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 def convert_bank_transactions(
     source_factory: Callable[[str], BankTransactionSource] = TransactionReader,
     budget_service_factory: Callable[[str], BudgetService] = YnabBudgetService,
+    accounts_config_path: Optional[str] = None,
+    dedup_enabled: bool = False,
+    upload_enabled: bool = False,
+    global_budget_id: Optional[str] = None,
 ) -> None:
     """Convert Finnish bank CSV exports to YNAB import CSVs.
 
-    Set ``YNAB_DEDUP_ENABLED=true`` to fetch existing YNAB transactions and
+    Set ``dedup_enabled=True`` to fetch existing YNAB transactions and
     filter out any bank rows that already appear in the budget.  Requires
     ``account_id`` per account in ``accounts.toml``, and a budget ID from
-    either ``budget_id`` in ``accounts.toml`` or ``YNAB_BUDGET_ID`` in the
-    environment (per-account value takes precedence).
+    either ``budget_id`` in ``accounts.toml`` or ``global_budget_id``
+    (per-account value takes precedence).
 
     ``source_factory`` and ``budget_service_factory`` can be overridden in
     tests or to swap in alternative data providers without modifying this
@@ -45,13 +47,9 @@ def convert_bank_transactions(
     transaction date in the bank file minus the date-tolerance buffer, making
     each run idempotent for the same input data.
     """
-    accounts_config_path = os.environ.get(
-        "YNAB_ACCOUNTS_CONFIG", str(_DATA_DIR.parent / "accounts.toml")
-    )
+    if accounts_config_path is None:
+        accounts_config_path = str(_DATA_DIR.parent / "accounts.toml")
     account_configs = read_accounts_config(accounts_config_path)
-    dedup_enabled = os.environ.get("YNAB_DEDUP_ENABLED", "").lower() == "true"
-    upload_enabled = os.environ.get("YNAB_UPLOAD_ENABLED", "").lower() == "true"
-    global_budget_id = os.environ.get("YNAB_BUDGET_ID")
     need_api = dedup_enabled or upload_enabled
     token: Optional[str] = read_credentials_file() if need_api else None
     budget_service: Optional[BudgetService] = budget_service_factory(token) if need_api else None  # type: ignore[arg-type]
@@ -107,7 +105,13 @@ def convert_bank_transactions(
 
 
 def run_app() -> None:
-    convert_bank_transactions()
+    load_dotenv()
+    convert_bank_transactions(
+        accounts_config_path=os.environ.get("YNAB_ACCOUNTS_CONFIG"),
+        dedup_enabled=os.environ.get("YNAB_DEDUP_ENABLED", "").lower() == "true",
+        upload_enabled=os.environ.get("YNAB_UPLOAD_ENABLED", "").lower() == "true",
+        global_budget_id=os.environ.get("YNAB_BUDGET_ID"),
+    )
 
 
 if __name__ == "__main__":
