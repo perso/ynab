@@ -1,7 +1,6 @@
 """YNAB REST API client."""
 
 import logging
-from collections import namedtuple
 from datetime import date
 from typing import Any, Dict, List, NamedTuple, Optional
 
@@ -9,16 +8,29 @@ import requests
 
 log = logging.getLogger(__name__)
 
-YnabTransaction = namedtuple(
-    "YnabTransaction",
-    [
-        "id", "date", "amount", "memo", "cleared", "approved", "flag_color",
-        "account_id", "payee_id", "category_id", "transfer_account_id",
-        "transfer_transaction_id", "matched_transaction_id", "import_id",
-        "import_payee_name", "import_payee_name_original", "debt_transaction_type",
-        "deleted", "account_name", "payee_name", "category_name",
-    ],
-)
+
+class YnabTransaction(NamedTuple):
+    id: str
+    date: str
+    amount: int
+    memo: Optional[str]
+    cleared: str
+    approved: bool
+    flag_color: Optional[str]
+    account_id: str
+    payee_id: Optional[str]
+    category_id: Optional[str]
+    transfer_account_id: Optional[str]
+    transfer_transaction_id: Optional[str]
+    matched_transaction_id: Optional[str]
+    import_id: Optional[str]
+    import_payee_name: Optional[str]
+    import_payee_name_original: Optional[str]
+    debt_transaction_type: Optional[str]
+    deleted: bool
+    account_name: str
+    payee_name: Optional[str]
+    category_name: Optional[str]
 
 
 class TransactionsResponse(NamedTuple):
