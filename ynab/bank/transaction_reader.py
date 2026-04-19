@@ -34,6 +34,7 @@ def read_transactions(file_name: Union[str, Path], header: bool = True) -> List[
     """Read transactions from a Finnish bank CSV export."""
     file_path = Path(file_name)
     transactions = []
+
     with open(file_path, encoding=_ENCODING, newline="") as csvfile:
         reader = csv.reader(csvfile, delimiter=_DELIMITER)
         if header:
@@ -58,6 +59,7 @@ def read_transactions(file_name: Union[str, Path], header: bool = True) -> List[
                     f"Failed to parse row {row_num} in {file_path}: {exc}"
                 ) from exc
             transactions.append(transaction)
+
     return transactions
 
 

@@ -7,7 +7,7 @@ from ynab.bank.transaction import BankTransaction, TransactionStatus
 from ynab.bank.transaction_writer import write_transactions
 
 
-class TestTransactionReader(unittest.TestCase):
+class TestTransactionWriter(unittest.TestCase):
     def setUp(self) -> None:
         self.expected_csv_lines = [
             'Date,Payee,Memo,Amount\n',
