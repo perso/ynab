@@ -458,6 +458,47 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         os.removedirs(temp_dir)
 
 
+class TestConvertBankTransactionsWithDedupAndUpload(unittest.TestCase):
+    """Verify that dedup and upload can both run in the same pass."""
+
+    def _write_input_csv(self, path: str, rows: list[str]) -> None:
+        header = '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"'
+        content = "\n".join([header] + rows)
+        with open(path, "wb") as f:
+            f.write(content.encode("iso-8859-1"))
+
+    @patch.dict(os.environ, {"YNAB_DEDUP_ENABLED": "true", "YNAB_UPLOAD_ENABLED": "true"})
+    def test_dedup_and_upload_both_run(self):
+        service = _FakeBudgetService(response=_EMPTY_RESPONSE, created_count=1)
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        self._write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with (
+            patch("ynab.main.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.main.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.main.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(budget_service_factory=lambda _token: service)
+
+        # Dedup ran
+        self.assertEqual(len(service.calls), 1)
+        # Upload ran
+        self.assertEqual(len(service.create_calls), 1)
+        budget_id, account_id, txns = service.create_calls[0]
+        self.assertEqual(budget_id, "b1")
+        self.assertEqual(account_id, "a1")
+        self.assertEqual(len(txns), 1)
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+
 class TestRunApp(unittest.TestCase):
     @patch("ynab.main.convert_bank_transactions")
     def test_run_app_calls_convert(self, mock_convert):
