@@ -78,10 +78,10 @@ def convert_bank_transactions(
         log.info("%s -> %s", mapping.input_path, mapping.output_path)
         transactions = source_factory(mapping.input_path).read_transactions()
         transactions = filter_unchecked_transactions(transactions)
+        cfg = account_configs[mapping.account_no]
+        effective_budget_id = cfg.budget_id or global_budget_id
 
         if dedup_enabled and transactions:
-            cfg = account_configs[mapping.account_no]
-            effective_budget_id = cfg.budget_id or global_budget_id
             if not effective_budget_id or not cfg.account_id:
                 raise ValueError(
                     f"YNAB_DEDUP_ENABLED=true but dedup config is incomplete for account "
@@ -102,8 +102,6 @@ def convert_bank_transactions(
         TransactionWriter(mapping.output_path).write_transactions(transactions)
 
         if upload_enabled and transactions:
-            cfg = account_configs[mapping.account_no]
-            effective_budget_id = cfg.budget_id or global_budget_id
             if not effective_budget_id or not cfg.account_id:
                 log.warning(
                     "Upload skipped for account '%s': set 'account_id' in accounts.toml "
