@@ -8,17 +8,7 @@ _DECIMAL_SEPARATOR = ","
 
 
 def parse_date(date_string: str) -> date:
-    """Parse a Finnish bank date string into a date object.
-
-    Args:
-        date_string: Date in ``dd.mm.yyyy`` format.
-
-    Returns:
-        Parsed date.
-
-    Raises:
-        ValueError: If the string does not match the expected format.
-    """
+    """Parse a Finnish bank date string (``dd.mm.yyyy``) into a ``date`` object."""
     try:
         return datetime.strptime(date_string, _DATE_FORMAT).date()
     except ValueError:
@@ -26,17 +16,7 @@ def parse_date(date_string: str) -> date:
 
 
 def parse_required_amount(float_string: str) -> float:
-    """Parse a required Finnish bank amount string into a float.
-
-    Args:
-        float_string: Amount with comma decimal separator and optional spaces.
-
-    Returns:
-        Parsed amount.
-
-    Raises:
-        ValueError: If the string is empty or cannot be parsed.
-    """
+    """Parse a required Finnish amount string (comma decimal) into a float; raises ValueError if empty."""
     if float_string == "":
         raise ValueError("Amount field must not be empty.")
     result = parse_amount_sign_leading(float_string)
@@ -45,15 +25,7 @@ def parse_required_amount(float_string: str) -> float:
 
 
 def parse_amount_sign_leading(float_string: str) -> Optional[float]:
-    """Parse a Finnish bank amount string into a float.
-
-    Args:
-        float_string: Amount with comma decimal separator, optional spaces, and
-            optional leading ``+``/``-`` sign. Empty string returns ``None``.
-
-    Returns:
-        Parsed amount, or ``None`` for an empty string.
-    """
+    """Parse a Finnish amount string (comma decimal, optional sign/spaces) into a float, or None if empty."""
     if float_string == "":
         return None
     return float(float_string.replace(_DECIMAL_SEPARATOR, ".").replace(" ", ""))
