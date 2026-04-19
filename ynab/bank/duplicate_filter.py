@@ -2,10 +2,24 @@
 
 import logging
 from datetime import date, datetime, timedelta
-from typing import Iterable, List
+from typing import Iterable, List, Protocol
 
 from ynab.bank.transaction import BankTransaction
-from ynab.ynab_api.ynab_api_client import YnabTransaction
+
+
+class _YnabTransactionLike(Protocol):
+    @property
+    def id(self) -> str: ...
+    @property
+    def date(self) -> str: ...
+    @property
+    def amount(self) -> int: ...
+    @property
+    def cleared(self) -> str: ...
+    @property
+    def account_id(self) -> str: ...
+    @property
+    def deleted(self) -> bool: ...
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +35,7 @@ def to_milliunits(amount: float) -> int:
 
 def filter_already_in_ynab(
     bank_transactions: List[BankTransaction],
-    ynab_transactions: Iterable[YnabTransaction],
+    ynab_transactions: Iterable[_YnabTransactionLike],
     account_id: str,
     date_tolerance_days: int = DEFAULT_DATE_TOLERANCE_DAYS,
 ) -> List[BankTransaction]:
