@@ -1,0 +1,73 @@
+"""CLI entry point for the YNAB bank import tool."""
+
+import argparse
+import logging
+from importlib.resources import files
+
+from ynab.converter import _CONFIG_DIR, convert_bank_transactions
+
+log = logging.getLogger(__name__)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Convert Finnish bank CSV exports to YNAB import CSVs.",
+    )
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("init", help="set up ~/.config/ynab/ with default files and directories")
+
+    parser.add_argument(
+        "--input-dir", default=str(_CONFIG_DIR / "input"), metavar="PATH",
+        help=f"directory containing bank export CSVs (default: {_CONFIG_DIR / 'input'})",
+    )
+    parser.add_argument(
+        "--output-dir", default=str(_CONFIG_DIR / "output"), metavar="PATH",
+        help=f"directory for YNAB import CSVs (default: {_CONFIG_DIR / 'output'})",
+    )
+    parser.add_argument(
+        "--upload", action="store_true",
+        help="upload transactions directly to the YNAB API",
+    )
+    parser.add_argument(
+        "--dedup", action="store_true",
+        help="fetch existing YNAB transactions and filter duplicates before writing",
+    )
+    parser.add_argument(
+        "--budget-id", metavar="UUID",
+        help="global YNAB budget ID; per-account value in accounts.toml takes precedence",
+    )
+    return parser
+
+
+def run_init() -> None:
+    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    (_CONFIG_DIR / "input").mkdir(exist_ok=True)
+    (_CONFIG_DIR / "output").mkdir(exist_ok=True)
+
+    accounts_path = _CONFIG_DIR / "accounts.toml"
+    if accounts_path.exists():
+        log.info("accounts.toml already exists, skipping: %s", accounts_path)
+    else:
+        template = files("ynab.templates").joinpath("accounts.toml.example").read_text(encoding="utf-8")
+        accounts_path.write_text(template)
+        log.info("Created %s", accounts_path)
+
+    log.info("Configuration directory ready: %s", _CONFIG_DIR)
+    log.info("Next steps:")
+    log.info("  1. Edit %s", accounts_path)
+    log.info("  2. Place bank export CSVs in %s", _CONFIG_DIR / "input")
+    log.info("  3. Run: ynab")
+
+
+def run_app() -> None:
+    args = build_parser().parse_args()
+    if args.command == "init":
+        run_init()
+    else:
+        convert_bank_transactions(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            dedup_enabled=args.dedup,
+            upload_enabled=args.upload,
+            global_budget_id=args.budget_id,
+        )
