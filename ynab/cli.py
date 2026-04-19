@@ -10,6 +10,10 @@ log = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser for the ``ynab`` CLI.
+
+    :returns: Configured :class:`argparse.ArgumentParser` instance.
+    """
     parser = argparse.ArgumentParser(
         description="Convert Finnish bank CSV exports to YNAB import CSVs.",
     )
@@ -40,6 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_init() -> None:
+    """Create the ``~/.config/ynab/`` directory structure and a starter ``accounts.toml``.
+
+    Skips writing ``accounts.toml`` if it already exists.
+    """
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     (_CONFIG_DIR / "input").mkdir(exist_ok=True)
     (_CONFIG_DIR / "output").mkdir(exist_ok=True)
@@ -60,6 +68,7 @@ def run_init() -> None:
 
 
 def run_app() -> None:
+    """Parse CLI arguments and dispatch to :func:`run_init` or :func:`~ynab.converter.convert_bank_transactions`."""
     args = build_parser().parse_args()
     if args.command == "init":
         run_init()

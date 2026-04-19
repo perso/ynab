@@ -18,6 +18,10 @@ class YnabBudgetService:
     """
 
     def __init__(self, token: str) -> None:
+        """Initialise the service with a YNAB personal access token.
+
+        :param token: YNAB personal access token used to authenticate all API calls.
+        """
         self._token = token
 
     def get_transactions(
@@ -25,6 +29,12 @@ class YnabBudgetService:
         budget_id: str,
         since_date: date,
     ) -> TransactionsResponse:
+        """Fetch transactions for a budget from the YNAB API.
+
+        :param budget_id: YNAB budget UUID to query.
+        :param since_date: Only return transactions on or after this date.
+        :returns: Response containing the transaction list and server knowledge value.
+        """
         return ynab_api_client.get_transactions(self._token, budget_id, since_date)
 
     def create_transactions(
@@ -33,5 +43,16 @@ class YnabBudgetService:
         account_id: str,
         transactions: List[BankTransaction],
     ) -> int:
+        """Upload bank transactions to a YNAB account.
+
+        Converts ``transactions`` to API payloads via ``to_api_payloads`` before
+        posting.  YNAB deduplicates by ``import_id``, so repeated calls with the
+        same input are safe.
+
+        :param budget_id: YNAB budget UUID to post transactions into.
+        :param account_id: YNAB account UUID to associate each transaction with.
+        :param transactions: Bank transactions to upload.
+        :returns: Number of transactions accepted by the YNAB API.
+        """
         payloads = to_api_payloads(transactions, account_id)
         return ynab_api_client.create_transactions(self._token, budget_id, payloads)
