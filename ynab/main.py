@@ -2,13 +2,12 @@
 
 import logging
 import os
-from datetime import timedelta
 from pathlib import Path
 from typing import Callable, Optional
 
 from dotenv import load_dotenv
 
-from ynab.bank.duplicate_filter import DEFAULT_DATE_TOLERANCE_DAYS, filter_already_in_ynab
+from ynab.bank.duplicate_filter import DEFAULT_DATE_TOLERANCE_DAYS, filter_already_in_ynab, derive_since_date
 from ynab.bank.transaction_filters import filter_unchecked_transactions
 from ynab.bank.transaction_reader import TransactionReader
 from ynab.bank.transaction_source import BankTransactionSource
@@ -78,7 +77,7 @@ def convert_bank_transactions(
                     f"'budget_id' in accounts.toml or YNAB_BUDGET_ID in the environment."
                 )
             tolerance = cfg.date_tolerance_days if cfg.date_tolerance_days is not None else DEFAULT_DATE_TOLERANCE_DAYS
-            since = min(t.date for t in transactions) - timedelta(days=tolerance)
+            since = derive_since_date(transactions, tolerance)
             api_response = budget_service.get_transactions(  # type: ignore[union-attr]
                 effective_budget_id, since
             )

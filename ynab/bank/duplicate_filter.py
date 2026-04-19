@@ -1,7 +1,7 @@
 """Filter bank transactions that already exist in YNAB."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Iterable, List
 
 from ynab.bank.transaction import BankTransaction
@@ -72,3 +72,8 @@ def filter_already_in_ynab(
         len(bank_transactions), filtered, len(kept),
     )
     return kept
+
+
+def derive_since_date(transactions: List[BankTransaction], tolerance_days: int) -> date:
+    """Return the earliest transaction date minus tolerance, for querying the YNAB API."""
+    return min(t.date for t in transactions) - timedelta(days=tolerance_days)
