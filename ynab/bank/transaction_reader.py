@@ -51,6 +51,10 @@ class TransactionReader:
             if self.header:
                 next(reader, None)
             for row_num, row in enumerate(reader, start=2):
+                if len(row) < 8:
+                    raise ValueError(
+                        f"Expected 8 columns, got {len(row)} in row {row_num} of {self.file_name}"
+                    )
                 try:
                     transaction = BankTransaction(
                         date=parse_date(row[0]),

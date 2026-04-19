@@ -75,6 +75,22 @@ class TestTransactionReader(unittest.TestCase):
             TransactionStatus.PENDING,
         )
 
+    def test_read_transactions_short_row(self):
+        bad_csv = "\n".join([
+            '"Pvm";"Luokka";"Alaluokka";"Saaja/Maksaja";"Määrä";"Saldo";"Tila";"Tarkastus"',
+            '"20.04.2023";"Cat";"Sub"',  # only 3 columns
+        ])
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(bad_csv.encode('iso-8859-1'))
+            filename = f.name
+
+        with self.assertRaises(ValueError) as ctx:
+            TransactionReader(filename).read_transactions()
+        self.assertIn("3", str(ctx.exception))
+        self.assertIn("row 2", str(ctx.exception))
+
+        os.remove(filename)
+
     def test_read_transactions_no_header(self):
         csv_without_header = "\n".join([
             '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"8 588,83";"Toteutunut";"Ei"',
