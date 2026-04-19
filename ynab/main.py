@@ -15,6 +15,7 @@ from ynab.bank.transaction_writer import write_transactions
 from ynab.budget_service import BudgetService
 from ynab.utilities.config_util import read_accounts_config, read_credentials_file
 from ynab.utilities.fs_util import form_file_paths
+from ynab.ynab_api.ynab_api_client import TransactionsResponse
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -76,7 +77,7 @@ def convert_bank_transactions(
                 )
             tolerance = cfg.date_tolerance_days if cfg.date_tolerance_days is not None else DEFAULT_DATE_TOLERANCE_DAYS
             since = derive_since_date(transactions, tolerance)
-            api_response = budget_service.get_transactions(  # type: ignore[union-attr]
+            api_response: TransactionsResponse = budget_service.get_transactions(  # type: ignore[union-attr]
                 effective_budget_id, since
             )
             transactions = filter_already_in_ynab(
@@ -106,6 +107,7 @@ def convert_bank_transactions(
 
 def run_app() -> None:
     load_dotenv()
+    
     convert_bank_transactions(
         accounts_config_path=os.environ.get("YNAB_ACCOUNTS_CONFIG"),
         dedup_enabled=os.environ.get("YNAB_DEDUP_ENABLED", "").lower() == "true",
