@@ -3,15 +3,15 @@
 import logging
 import os
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from dotenv import load_dotenv
 
 from ynab.bank.duplicate_filter import DEFAULT_DATE_TOLERANCE_DAYS, filter_already_in_ynab, derive_since_date
+from ynab.bank.transaction import BankTransaction
 from ynab.bank.transaction_filters import filter_unchecked_transactions
-from ynab.bank.transaction_reader import TransactionReader
-from ynab.bank.transaction_source import BankTransactionSource
-from ynab.bank.transaction_writer import TransactionWriter
+from ynab.bank.transaction_reader import read_transactions
+from ynab.bank.transaction_writer import write_transactions
 from ynab.budget_service import BudgetService
 from ynab.utilities.config_util import read_accounts_config, read_credentials_file
 from ynab.utilities.fs_util import form_file_paths
@@ -24,7 +24,7 @@ _DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
 def convert_bank_transactions(
-    source_factory: Callable[[str], BankTransactionSource] = TransactionReader,
+    source_factory: Callable[[str], List[BankTransaction]] = read_transactions,
     budget_service_factory: Callable[[str], BudgetService] = YnabBudgetService,
     accounts_config_path: Optional[str] = None,
     dedup_enabled: bool = False,
@@ -62,7 +62,7 @@ def convert_bank_transactions(
 
     for mapping in mappings:
         log.info("%s -> %s", mapping.input_path, mapping.output_path)
-        transactions = source_factory(mapping.input_path).read_transactions()
+        transactions = source_factory(mapping.input_path)
         transactions = filter_unchecked_transactions(transactions)
         cfg = account_configs[mapping.account_no]
         effective_budget_id = cfg.budget_id or global_budget_id
@@ -85,7 +85,7 @@ def convert_bank_transactions(
             )
 
         transactions = sorted(set(transactions))
-        TransactionWriter(mapping.output_path).write_transactions(transactions)
+        write_transactions(mapping.output_path, transactions)
 
         if upload_enabled and transactions:
             if not effective_budget_id or not cfg.account_id:

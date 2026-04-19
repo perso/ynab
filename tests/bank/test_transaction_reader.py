@@ -4,7 +4,7 @@ import unittest
 from datetime import date
 
 from ynab.bank.transaction import BankTransaction, TransactionStatus
-from ynab.bank.transaction_reader import TransactionReader
+from ynab.bank.transaction_reader import read_transactions, _resolve_status
 
 
 class TestTransactionReader(unittest.TestCase):
@@ -31,7 +31,7 @@ class TestTransactionReader(unittest.TestCase):
             f.write(self.input_csv.encode('iso-8859-1'))
             filename = f.name
 
-        transactions = TransactionReader(f.name).read_transactions()
+        transactions = read_transactions(f.name)
         self.assertEqual(self.expected_transactions, transactions)
 
         os.remove(filename)
@@ -46,32 +46,32 @@ class TestTransactionReader(unittest.TestCase):
             filename = f.name
 
         with self.assertRaises(ValueError) as ctx:
-            TransactionReader(filename).read_transactions()
+            read_transactions(filename)
         self.assertIn("row 2", str(ctx.exception))
 
         os.remove(filename)
 
     def test_resolve_status_reconciled(self):
         self.assertEqual(
-            TransactionReader._resolve_status("Toteutunut", "Kyllä"),
+            _resolve_status("Toteutunut", "Kyllä"),
             TransactionStatus.RECONCILED,
         )
 
     def test_resolve_status_cleared(self):
         self.assertEqual(
-            TransactionReader._resolve_status("Toteutunut", "Ei"),
+            _resolve_status("Toteutunut", "Ei"),
             TransactionStatus.CLEARED,
         )
 
     def test_resolve_status_pending(self):
         self.assertEqual(
-            TransactionReader._resolve_status("Odottaa", "Ei"),
+            _resolve_status("Odottaa", "Ei"),
             TransactionStatus.PENDING,
         )
 
     def test_resolve_status_unknown_is_pending(self):
         self.assertEqual(
-            TransactionReader._resolve_status("", ""),
+            _resolve_status("", ""),
             TransactionStatus.PENDING,
         )
 
@@ -85,7 +85,7 @@ class TestTransactionReader(unittest.TestCase):
             filename = f.name
 
         with self.assertRaises(ValueError) as ctx:
-            TransactionReader(filename).read_transactions()
+            read_transactions(filename)
         self.assertIn("3", str(ctx.exception))
         self.assertIn("row 2", str(ctx.exception))
 
@@ -99,7 +99,7 @@ class TestTransactionReader(unittest.TestCase):
             f.write(csv_without_header.encode('iso-8859-1'))
             filename = f.name
 
-        transactions = TransactionReader(filename, header=False).read_transactions()
+        transactions = read_transactions(filename, header=False)
         self.assertEqual(len(transactions), 1)
         self.assertEqual(transactions[0].payee, 'Shop A')
         self.assertEqual(transactions[0].status, TransactionStatus.CLEARED)
