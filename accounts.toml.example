@@ -5,7 +5,7 @@
 # is used as the fallback. Set it here only if this account belongs to a
 # different budget than YNAB_BUDGET_ID.
 #
-# account_id is required only when YNAB_DEDUP_ENABLED=true.
+# account_id is required when YNAB_DEDUP_ENABLED=true or YNAB_UPLOAD_ENABLED=true.
 #
 # date_tolerance_days controls how many days of slack is allowed when matching
 # bank transactions against YNAB. Defaults to 3. Credit cards often need a
