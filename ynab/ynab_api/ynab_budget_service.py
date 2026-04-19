@@ -4,7 +4,7 @@ from datetime import date
 from typing import List
 
 from ynab.bank.transaction import BankTransaction
-from ynab.bank.transaction_uploader import to_api_payloads
+from ynab.ynab_api.transaction_uploader import to_api_payloads
 from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabApiClient
 
 

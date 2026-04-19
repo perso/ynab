@@ -3,7 +3,7 @@ from datetime import date
 from hashlib import sha256
 
 from ynab.bank.transaction import BankTransaction, TransactionStatus
-from ynab.bank.transaction_uploader import to_api_payload, to_api_payloads
+from ynab.ynab_api.transaction_uploader import to_api_payload, to_api_payloads
 
 _CLEARED = TransactionStatus.CLEARED
 
