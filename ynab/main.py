@@ -62,9 +62,11 @@ def convert_bank_transactions(
     )
     account_configs = read_accounts_config(accounts_config_path)
     dedup_enabled = os.environ.get("YNAB_DEDUP_ENABLED", "").lower() == "true"
+    upload_enabled = os.environ.get("YNAB_UPLOAD_ENABLED", "").lower() == "true"
     global_budget_id = os.environ.get("YNAB_BUDGET_ID")
-    token: Optional[str] = read_credentials_file() if dedup_enabled else None
-    budget_service: Optional[BudgetService] = budget_service_factory(token) if dedup_enabled else None  # type: ignore[arg-type]
+    need_api = dedup_enabled or upload_enabled
+    token: Optional[str] = read_credentials_file() if need_api else None
+    budget_service: Optional[BudgetService] = budget_service_factory(token) if need_api else None  # type: ignore[arg-type]
 
     mappings = form_file_paths(
         input_dir=str(_DATA_DIR / "input"),
@@ -98,6 +100,24 @@ def convert_bank_transactions(
 
         transactions = sorted(set(transactions))
         TransactionWriter(mapping.output_path).write_transactions(transactions)
+
+        if upload_enabled and transactions:
+            cfg = account_configs[mapping.account_no]
+            effective_budget_id = cfg.budget_id or global_budget_id
+            if not effective_budget_id or not cfg.account_id:
+                log.warning(
+                    "Upload skipped for account '%s': set 'account_id' in accounts.toml "
+                    "and either 'budget_id' in accounts.toml or YNAB_BUDGET_ID in the environment.",
+                    mapping.account_no,
+                )
+            else:
+                count = budget_service.create_transactions(  # type: ignore[union-attr]
+                    effective_budget_id, cfg.account_id, transactions
+                )
+                log.info(
+                    "Uploaded %d transaction(s) to YNAB for account '%s'",
+                    count, mapping.account_no,
+                )
 
 
 def run_app() -> None:
