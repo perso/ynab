@@ -6,6 +6,18 @@ Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish 
 
 **API reference:** <https://api.ynab.com>
 
+## Configuration directory
+
+All configuration and data files live under `~/.config/ynab/`:
+
+```
+~/.config/ynab/
+├── accounts.toml       # account number → budget name mapping
+├── credentials         # YNAB API token (one line)
+├── input/              # place bank export CSVs here
+└── output/             # converted YNAB import CSVs are written here
+```
+
 ## Quick start
 
 1. Install dependencies:
@@ -13,35 +25,45 @@ Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish 
    poetry install
    ```
 
-2. Copy `accounts.toml.example` to `accounts.toml` and fill in your accounts:
+2. Run the init command to create the configuration directory and a starter `accounts.toml`:
+   ```bash
+   poetry run ynab init
+   ```
+
+3. Edit `~/.config/ynab/accounts.toml` and fill in your accounts:
    ```toml
    [accounts.FI1234567890]
    budget_name = "MyBudget"
    ```
 
-3. Place bank export CSVs in an input directory. Filenames must follow the format `<account_no>_<anything>.csv`.
+4. Place bank export CSVs in `~/.config/ynab/input/`. Filenames must follow the format `<account_no>_<anything>.csv`.
 
-4. Run the converter:
+5. Run the converter:
    ```bash
-   poetry run ynab --input-dir path/to/exports --output-dir path/to/output
+   poetry run ynab
    ```
 
-   All flags are optional — omitting `--input-dir` and `--output-dir` defaults to `./input` and `./output` relative to the current working directory.
+   Converted CSVs are written to `~/.config/ynab/output/`. Override the input or output location with `--input-dir` or `--output-dir` if needed.
 
-5. *(Optional)* Enable direct upload to YNAB — see **Direct upload** below.
+6. *(Optional)* Enable direct upload to YNAB — see **Direct upload** below.
 
-6. *(Optional)* Enable duplicate filtering — see **Deduplication** below.
+7. *(Optional)* Enable duplicate filtering — see **Deduplication** below.
 
 ## CLI reference
 
 ```
-usage: ynab [-h] [--input-dir PATH] [--output-dir PATH] [--accounts PATH]
+usage: ynab [-h] [--input-dir PATH] [--output-dir PATH]
             [--upload] [--dedup] [--budget-id UUID]
+       ynab init
+
+commands:
+  init               create ~/.config/ynab/ with directories and a starter accounts.toml
 
 options:
-  --input-dir PATH   directory containing bank export CSVs (default: ./input)
-  --output-dir PATH  directory for YNAB import CSVs (default: ./output)
-  --accounts PATH    path to accounts.toml (default: ./accounts.toml)
+  --input-dir PATH   directory containing bank export CSVs
+                     (default: ~/.config/ynab/input)
+  --output-dir PATH  directory for YNAB import CSVs
+                     (default: ~/.config/ynab/output)
   --upload           upload transactions directly to the YNAB API
   --dedup            fetch existing YNAB transactions and filter duplicates
   --budget-id UUID   global YNAB budget ID; per-account value in accounts.toml

@@ -509,7 +509,6 @@ class TestRunApp(unittest.TestCase):
         mock_convert.assert_called_once_with(
             input_dir=str(_CONFIG_DIR / "input"),
             output_dir=str(_CONFIG_DIR / "output"),
-            accounts_config_path=str(_CONFIG_DIR / "accounts.toml"),
             dedup_enabled=False,
             upload_enabled=False,
             global_budget_id=None,
@@ -522,7 +521,6 @@ class TestRunApp(unittest.TestCase):
             "ynab",
             "--input-dir", "/tmp/in",
             "--output-dir", "/tmp/out",
-            "--accounts", "/tmp/accounts.toml",
             "--upload",
             "--dedup",
             "--budget-id", "b-uuid",
@@ -531,8 +529,46 @@ class TestRunApp(unittest.TestCase):
         mock_convert.assert_called_once_with(
             input_dir="/tmp/in",
             output_dir="/tmp/out",
-            accounts_config_path="/tmp/accounts.toml",
             dedup_enabled=True,
             upload_enabled=True,
             global_budget_id="b-uuid",
         )
+
+
+class TestRunInit(unittest.TestCase):
+    def test_init_creates_directories_and_template(self):
+        from importlib.resources import files
+        from ynab.main import run_init
+        expected_template = files("ynab.templates").joinpath("accounts.toml.example").read_text(encoding="utf-8")
+        with patch("ynab.main._CONFIG_DIR") as mock_dir:
+            mock_dir.mkdir = unittest.mock.MagicMock()
+            input_dir = unittest.mock.MagicMock()
+            output_dir = unittest.mock.MagicMock()
+            accounts_path = unittest.mock.MagicMock()
+            accounts_path.exists.return_value = False
+            mock_dir.__truediv__ = lambda self, key: {
+                "input": input_dir,
+                "output": output_dir,
+                "accounts.toml": accounts_path,
+            }[key]
+            run_init()
+        mock_dir.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+        input_dir.mkdir.assert_called_once_with(exist_ok=True)
+        output_dir.mkdir.assert_called_once_with(exist_ok=True)
+        accounts_path.write_text.assert_called_once_with(expected_template)
+
+    def test_init_skips_existing_accounts_toml(self):
+        from ynab.main import run_init
+        with patch("ynab.main._CONFIG_DIR") as mock_dir:
+            mock_dir.mkdir = unittest.mock.MagicMock()
+            input_dir = unittest.mock.MagicMock()
+            output_dir = unittest.mock.MagicMock()
+            accounts_path = unittest.mock.MagicMock()
+            accounts_path.exists.return_value = True
+            mock_dir.__truediv__ = lambda self, key: {
+                "input": input_dir,
+                "output": output_dir,
+                "accounts.toml": accounts_path,
+            }[key]
+            run_init()
+        accounts_path.write_text.assert_not_called()

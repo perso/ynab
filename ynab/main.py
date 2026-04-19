@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from importlib.resources import files
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -22,12 +23,12 @@ log = logging.getLogger(__name__)
 _CONFIG_DIR = Path.home() / ".config" / "ynab"
 
 
+
 def convert_bank_transactions(
     source_factory: Callable[[str], List[BankTransaction]] = read_transactions,
     budget_service_factory: Callable[[str], BudgetService] = YnabBudgetService,
-    input_dir: str = "./input",
-    output_dir: str = "./output",
-    accounts_config_path: str = "./accounts.toml",
+    input_dir: str = str(_CONFIG_DIR / "input"),
+    output_dir: str = str(_CONFIG_DIR / "output"),
     dedup_enabled: bool = False,
     upload_enabled: bool = False,
     global_budget_id: Optional[str] = None,
@@ -36,18 +37,19 @@ def convert_bank_transactions(
 
     Reads all ``*.csv`` files from ``input_dir``, converts them, and writes
     YNAB import CSVs to ``output_dir``.  Input filenames must follow the
-    format ``<account_no>_<suffix>.csv``.
+    format ``<account_no>_<suffix>.csv``.  Account configuration is always
+    read from ``~/.config/ynab/accounts.toml``.
 
     Set ``dedup_enabled=True`` to fetch existing YNAB transactions and filter
     out bank rows that already appear in the budget.  Set ``upload_enabled=True``
     to POST transactions directly to the YNAB API.  Both require ``account_id``
-    per account in ``accounts_config_path``, and a budget ID from either
-    ``budget_id`` in that file or ``global_budget_id``.
+    per account in ``accounts.toml``, and a budget ID from either ``budget_id``
+    in that file or ``global_budget_id``.
 
     ``source_factory`` and ``budget_service_factory`` can be overridden in
     tests without modifying this function.
     """
-    account_configs = read_accounts_config(accounts_config_path)
+    account_configs = read_accounts_config(str(_CONFIG_DIR / "accounts.toml"))
     need_api = dedup_enabled or upload_enabled
     token: Optional[str] = read_credentials_file() if need_api else None
     budget_service: Optional[BudgetService] = budget_service_factory(token) if need_api else None  # type: ignore[arg-type]
@@ -102,10 +104,33 @@ def convert_bank_transactions(
                 )
 
 
+def run_init() -> None:
+    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    (_CONFIG_DIR / "input").mkdir(exist_ok=True)
+    (_CONFIG_DIR / "output").mkdir(exist_ok=True)
+
+    accounts_path = _CONFIG_DIR / "accounts.toml"
+    if accounts_path.exists():
+        log.info("accounts.toml already exists, skipping: %s", accounts_path)
+    else:
+        template = files("ynab.templates").joinpath("accounts.toml.example").read_text(encoding="utf-8")
+        accounts_path.write_text(template)
+        log.info("Created %s", accounts_path)
+
+    log.info("Configuration directory ready: %s", _CONFIG_DIR)
+    log.info("Next steps:")
+    log.info("  1. Edit %s", accounts_path)
+    log.info("  2. Place bank export CSVs in %s", _CONFIG_DIR / "input")
+    log.info("  3. Run: ynab")
+
+
 def run_app() -> None:
     parser = argparse.ArgumentParser(
         description="Convert Finnish bank CSV exports to YNAB import CSVs.",
     )
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("init", help="set up ~/.config/ynab/ with default files and directories")
+
     parser.add_argument(
         "--input-dir", default=str(_CONFIG_DIR / "input"), metavar="PATH",
         help=f"directory containing bank export CSVs (default: {_CONFIG_DIR / 'input'})",
@@ -113,10 +138,6 @@ def run_app() -> None:
     parser.add_argument(
         "--output-dir", default=str(_CONFIG_DIR / "output"), metavar="PATH",
         help=f"directory for YNAB import CSVs (default: {_CONFIG_DIR / 'output'})",
-    )
-    parser.add_argument(
-        "--accounts", default=str(_CONFIG_DIR / "accounts.toml"), metavar="PATH",
-        help=f"path to accounts.toml (default: {_CONFIG_DIR / 'accounts.toml'})",
     )
     parser.add_argument(
         "--upload", action="store_true",
@@ -132,14 +153,16 @@ def run_app() -> None:
     )
     args = parser.parse_args()
 
-    convert_bank_transactions(
-        input_dir=args.input_dir,
-        output_dir=args.output_dir,
-        accounts_config_path=args.accounts,
-        dedup_enabled=args.dedup,
-        upload_enabled=args.upload,
-        global_budget_id=args.budget_id,
-    )
+    if args.command == "init":
+        run_init()
+    else:
+        convert_bank_transactions(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            dedup_enabled=args.dedup,
+            upload_enabled=args.upload,
+            global_budget_id=args.budget_id,
+        )
 
 
 if __name__ == "__main__":
