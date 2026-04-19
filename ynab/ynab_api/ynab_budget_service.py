@@ -4,12 +4,13 @@ from datetime import date
 from typing import List
 
 from ynab.bank.transaction import BankTransaction
+from ynab.ynab_api import ynab_api_client
 from ynab.ynab_api.transaction_uploader import to_api_payloads
-from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabApiClient
+from ynab.ynab_api.ynab_api_client import TransactionsResponse
 
 
 class YnabBudgetService:
-    """Wraps ``YnabApiClient`` as an instance-method service.
+    """Wraps ``ynab_api_client`` as an instance-method service.
 
     Satisfies the ``BudgetService`` protocol so it can be injected into
     ``convert_bank_transactions`` or replaced with a different implementation
@@ -24,7 +25,7 @@ class YnabBudgetService:
         budget_id: str,
         since_date: date,
     ) -> TransactionsResponse:
-        return YnabApiClient.get_transactions(self._token, budget_id, since_date)
+        return ynab_api_client.get_transactions(self._token, budget_id, since_date)
 
     def create_transactions(
         self,
@@ -33,4 +34,4 @@ class YnabBudgetService:
         transactions: List[BankTransaction],
     ) -> int:
         payloads = to_api_payloads(transactions, account_id)
-        return YnabApiClient.create_transactions(self._token, budget_id, payloads)
+        return ynab_api_client.create_transactions(self._token, budget_id, payloads)

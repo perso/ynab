@@ -16,7 +16,7 @@ class TestYnabBudgetServiceProtocol(unittest.TestCase):
         service = YnabBudgetService("token")
         self.assertIsInstance(service, BudgetService)
 
-    @patch("ynab.ynab_api.ynab_budget_service.YnabApiClient.get_transactions")
+    @patch("ynab.ynab_api.ynab_budget_service.ynab_api_client.get_transactions")
     def test_delegates_get_to_api_client(self, mock_get):
         mock_get.return_value = TransactionsResponse(transactions=[], server_knowledge=5)
         service = YnabBudgetService("tok")
@@ -24,7 +24,7 @@ class TestYnabBudgetServiceProtocol(unittest.TestCase):
         mock_get.assert_called_once_with("tok", "b1", date(2023, 1, 1))
         self.assertEqual(result.server_knowledge, 5)
 
-    @patch("ynab.ynab_api.ynab_budget_service.YnabApiClient.create_transactions")
+    @patch("ynab.ynab_api.ynab_budget_service.ynab_api_client.create_transactions")
     def test_delegates_create_to_api_client(self, mock_create):
         mock_create.return_value = 1
         service = YnabBudgetService("tok")
