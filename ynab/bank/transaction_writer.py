@@ -14,11 +14,7 @@ class TransactionWriter:
         self.path = Path(file_name)
 
     def write_transactions(self, transactions: List[BankTransaction]) -> None:
-        """Append transactions to the output CSV, writing a header if the file is empty.
-
-        Args:
-            transactions: Transactions to write.
-        """
+        """Write transactions to the output CSV, overwriting any existing content."""
         with open(self.path, mode="w", newline="") as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(_HEADER)
