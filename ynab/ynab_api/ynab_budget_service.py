@@ -6,7 +6,7 @@ from typing import List
 from ynab.bank.transaction import BankTransaction
 from ynab.ynab_api import ynab_api_client
 from ynab.ynab_api.transaction_uploader import to_api_payloads
-from ynab.ynab_api.ynab_api_client import TransactionsResponse
+from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount
 
 
 class YnabBudgetService:
@@ -56,5 +56,15 @@ class YnabBudgetService:
         :param approved: Whether to mark each transaction as approved in YNAB.
         :returns: Number of transactions accepted by the YNAB API.
         """
+
         payloads = to_api_payloads(transactions, account_id, approved=approved)
         return ynab_api_client.create_transactions(self._token, budget_id, payloads)
+
+    def get_account(self, budget_id: str, account_id: str) -> YnabAccount:
+        """Fetch a single account from the YNAB API.
+
+        :param budget_id: YNAB budget UUID.
+        :param account_id: YNAB account UUID.
+        :returns: ``YnabAccount`` with id, name, and cleared_balance (milliunits).
+        """
+        return ynab_api_client.get_account(self._token, budget_id, account_id)

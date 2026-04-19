@@ -28,6 +28,7 @@ def convert_bank_transactions(
     dedup_enabled: bool = False,
     upload_enabled: bool = False,
     approve_enabled: bool = False,
+    reconcile_enabled: bool = False,
     global_budget_id: Optional[str] = None,
 ) -> None:
     """Convert Finnish bank CSV exports to YNAB import CSVs.
@@ -39,15 +40,16 @@ def convert_bank_transactions(
 
     Set ``dedup_enabled=True`` to fetch existing YNAB transactions and filter
     out bank rows that already appear in the budget.  Set ``upload_enabled=True``
-    to POST transactions directly to the YNAB API.  Both require ``account_id``
-    per account in ``accounts.toml``, and a budget ID from either ``budget_id``
-    in that file or ``global_budget_id``.
+    to POST transactions directly to the YNAB API.  Set ``reconcile_enabled=True``
+    to compare the bank's last known balance against YNAB's cleared balance.
+    All three require ``account_id`` per account in ``accounts.toml``, and a
+    budget ID from either ``budget_id`` in that file or ``global_budget_id``.
 
     ``source_factory`` and ``budget_service_factory`` can be overridden in
     tests without modifying this function.
     """
     account_configs = read_accounts_config(str(_CONFIG_DIR / "accounts.toml"))
-    need_api = dedup_enabled or upload_enabled
+    need_api = dedup_enabled or upload_enabled or reconcile_enabled
     token: Optional[str] = read_credentials_file() if need_api else None
     budget_service: Optional[BudgetService] = budget_service_factory(token) if need_api else None  # type: ignore[arg-type]
 
@@ -59,8 +61,12 @@ def convert_bank_transactions(
 
     for mapping in mappings:
         log.info("%s -> %s", mapping.input_path, mapping.output_path)
-        transactions = source_factory(mapping.input_path)
-        transactions = filter_unchecked_transactions(transactions)
+        all_transactions = source_factory(mapping.input_path)
+        last_bank_balance: Optional[float] = max(
+            (t.balance for t in all_transactions if t.balance is not None),
+            default=None,
+        )
+        transactions = filter_unchecked_transactions(all_transactions)
         cfg = account_configs[mapping.account_no]
         effective_budget_id = cfg.budget_id or global_budget_id
 
@@ -99,3 +105,27 @@ def convert_bank_transactions(
                     "Uploaded %d transaction(s) to YNAB for account '%s'",
                     count, mapping.account_no,
                 )
+
+        if reconcile_enabled:
+            if not effective_budget_id or not cfg.account_id:
+                log.warning(
+                    "Reconciliation skipped for account '%s': set 'account_id' in accounts.toml "
+                    "and either 'budget_id' in accounts.toml or pass --budget-id.",
+                    mapping.account_no,
+                )
+            elif last_bank_balance is None:
+                log.warning(
+                    "Reconciliation skipped for account '%s': no balance found in bank CSV.",
+                    mapping.account_no,
+                )
+            else:
+                account = budget_service.get_account(  # type: ignore[union-attr]
+                    effective_budget_id, cfg.account_id
+                )
+                ynab_cleared = account.cleared_balance / 1000.0
+                diff = last_bank_balance - ynab_cleared
+                status = "✓" if diff == 0 else "✗"
+                log.info("Reconciliation for account '%s' (%s):", mapping.account_no, account.name)
+                log.info("  Bank balance:   %.2f", last_bank_balance)
+                log.info("  YNAB cleared:   %.2f", ynab_cleared)
+                log.info("  Difference:     %.2f  %s", diff, status)

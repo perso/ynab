@@ -44,6 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--approve", action="store_true",
         help="mark uploaded transactions as approved in YNAB (skips manual approval step)",
     )
+    parser.add_argument(
+        "--reconcile", action="store_true",
+        help="compare bank balance from CSV against YNAB cleared balance and report the diff",
+    )
     return parser
 
 
@@ -83,5 +87,6 @@ def run_app() -> None:
             dedup_enabled=args.dedup,
             upload_enabled=args.upload,
             approve_enabled=args.approve,
+            reconcile_enabled=args.reconcile,
             global_budget_id=args.budget_id,
         )

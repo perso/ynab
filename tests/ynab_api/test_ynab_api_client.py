@@ -7,9 +7,11 @@ import requests
 from ynab.ynab_api.ynab_api_client import (
     BASE_URL,
     TransactionsResponse,
+    YnabAccount,
     YnabApiError,
     YnabTransaction,
     create_transactions,
+    get_account,
     get_transactions,
 )
 
@@ -180,3 +182,62 @@ class TestYnabApiClientCreateTransactions(unittest.TestCase):
 
         with self.assertRaises(YnabApiError):
             create_transactions("token", "budget-id", [_SAMPLE_PAYLOAD])
+
+
+def _mock_account_response(account_id: str, name: str, cleared_balance: int, status_code: int = 200) -> MagicMock:
+    mock = MagicMock()
+    mock.status_code = status_code
+    mock.json.return_value = {"data": {"account": {
+        "id": account_id,
+        "name": name,
+        "cleared_balance": cleared_balance,
+    }}}
+    mock.raise_for_status.return_value = None
+    return mock
+
+
+class TestGetAccount(unittest.TestCase):
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_returns_ynab_account(self, mock_get):
+        mock_get.return_value = _mock_account_response("a1", "Checking", 1234567)
+
+        result = get_account("token", "budget-id", "a1")
+
+        self.assertEqual(result, YnabAccount(id="a1", name="Checking", cleared_balance=1234567))
+        mock_get.assert_called_once_with(
+            "https://api.ynab.com/v1/budgets/budget-id/accounts/a1",
+            headers={"Authorization": "Bearer token"},
+        )
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_raises_on_http_error(self, mock_get):
+        mock = MagicMock()
+        mock.status_code = 404
+        mock.raise_for_status.side_effect = requests.HTTPError("404")
+        mock_get.return_value = mock
+
+        with self.assertRaises(requests.HTTPError):
+            get_account("token", "budget-id", "a1")
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_raises_ynab_api_error_on_429(self, mock_get):
+        mock = MagicMock()
+        mock.status_code = 429
+        mock.headers = {"Retry-After": "10"}
+        mock_get.return_value = mock
+
+        with self.assertRaises(YnabApiError) as ctx:
+            get_account("token", "budget-id", "a1")
+
+        self.assertIn("10", str(ctx.exception))
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_raises_ynab_api_error_on_malformed_body(self, mock_get):
+        mock = MagicMock()
+        mock.status_code = 200
+        mock.raise_for_status.return_value = None
+        mock.json.return_value = {"unexpected": "shape"}
+        mock_get.return_value = mock
+
+        with self.assertRaises(YnabApiError):
+            get_account("token", "budget-id", "a1")
