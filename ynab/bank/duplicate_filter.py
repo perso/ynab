@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date, datetime
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 from ynab.bank.transaction import BankTransaction
 from ynab.ynab_api.ynab_api_client import YnabTransaction
@@ -55,24 +55,15 @@ def filter_already_in_ynab(
     for bt in sorted(bank_transactions, key=lambda t: (t.date, t.amount, t.payee)):
         amt_mu = to_milliunits(bt.amount)
         pool = by_amount.get(amt_mu, [])
-        best_idx: Optional[int] = None
-        best_delta: Optional[int] = None
-        best_ynab_date: Optional[date] = None
-        for i, (ynab_date, _ynab_id) in enumerate(pool):
-            delta = abs((ynab_date - bt.date).days)
-            if delta > date_tolerance_days:
-                continue
-            if (
-                best_delta is None
-                or delta < best_delta
-                or (delta == best_delta and best_ynab_date is not None and ynab_date < best_ynab_date)
-            ):
-                best_idx = i
-                best_delta = delta
-                best_ynab_date = ynab_date
-        if best_idx is None:
+        candidates = [
+            (abs((ynab_date - bt.date).days), ynab_date, i)
+            for i, (ynab_date, _) in enumerate(pool)
+            if abs((ynab_date - bt.date).days) <= date_tolerance_days
+        ]
+        if not candidates:
             kept.append(bt)
         else:
+            best_idx = min(candidates)[2]
             pool.pop(best_idx)
 
     filtered = len(bank_transactions) - len(kept)
