@@ -52,22 +52,21 @@ All configuration and data files live under `~/.config/ynab/`:
 ## CLI reference
 
 ```
-usage: ynab [-h] [--input-dir PATH] [--output-dir PATH]
-            [--upload] [--dedup] [--budget-id UUID]
-       ynab init
+usage: ynab <command> [options]
 
 commands:
   init               create ~/.config/ynab/ with directories and a starter accounts.toml
+  upload             convert bank CSVs and upload transactions to YNAB
 
-options:
+ynab upload options:
   --input-dir PATH   directory containing bank export CSVs
                      (default: ~/.config/ynab/input)
   --output-dir PATH  directory for YNAB import CSVs
                      (default: ~/.config/ynab/output)
-  --upload           upload transactions directly to the YNAB API
-  --dedup            fetch existing YNAB transactions and filter duplicates
-  --budget-id UUID   global YNAB budget ID; per-account value in accounts.toml
-                     takes precedence
+  --dedup            fetch existing YNAB transactions and filter duplicates before uploading
+  --approve          mark uploaded transactions as approved (skips manual approval step)
+  --reconcile        compare bank balance from CSV against YNAB cleared balance and report the diff
+  --budget-id UUID   global YNAB budget ID; per-account value in accounts.toml takes precedence
 ```
 
 ## Direct upload

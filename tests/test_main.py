@@ -697,29 +697,28 @@ class TestConvertBankTransactionsWithReconcile(unittest.TestCase):
 
 class TestRunApp(unittest.TestCase):
     @patch("ynab.cli.convert_bank_transactions")
-    def test_run_app_calls_convert_with_defaults(self, mock_convert):
+    def test_run_app_upload_calls_convert_with_defaults(self, mock_convert):
         from ynab.cli import run_app
         from ynab.converter import _CONFIG_DIR
-        with patch.object(sys, "argv", ["ynab"]):
+        with patch.object(sys, "argv", ["ynab", "upload"]):
             run_app()
         mock_convert.assert_called_once_with(
             input_dir=str(_CONFIG_DIR / "input"),
             output_dir=str(_CONFIG_DIR / "output"),
             dedup_enabled=False,
-            upload_enabled=False,
+            upload_enabled=True,
             approve_enabled=False,
             reconcile_enabled=False,
             global_budget_id=None,
         )
 
     @patch("ynab.cli.convert_bank_transactions")
-    def test_run_app_passes_flags(self, mock_convert):
+    def test_run_app_upload_passes_flags(self, mock_convert):
         from ynab.cli import run_app
         with patch.object(sys, "argv", [
-            "ynab",
+            "ynab", "upload",
             "--input-dir", "/tmp/in",
             "--output-dir", "/tmp/out",
-            "--upload",
             "--dedup",
             "--approve",
             "--reconcile",
@@ -735,6 +734,15 @@ class TestRunApp(unittest.TestCase):
             reconcile_enabled=True,
             global_budget_id="b-uuid",
         )
+
+    def test_run_app_no_subcommand_prints_help(self):
+        from ynab.cli import run_app
+        with patch.object(sys, "argv", ["ynab"]):
+            with patch("ynab.cli.build_parser") as mock_build:
+                mock_parser = mock_build.return_value
+                mock_parser.parse_args.return_value.command = None
+                run_app()
+        mock_parser.print_help.assert_called_once()
 
 
 class TestRunInit(unittest.TestCase):

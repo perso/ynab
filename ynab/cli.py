@@ -20,31 +20,31 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("init", help="set up ~/.config/ynab/ with default files and directories")
 
-    parser.add_argument(
+    upload = subparsers.add_parser(
+        "upload",
+        help="convert bank CSVs and upload transactions to YNAB",
+    )
+    upload.add_argument(
         "--input-dir", default=str(_CONFIG_DIR / "input"), metavar="PATH",
         help=f"directory containing bank export CSVs (default: {_CONFIG_DIR / 'input'})",
     )
-    parser.add_argument(
+    upload.add_argument(
         "--output-dir", default=str(_CONFIG_DIR / "output"), metavar="PATH",
         help=f"directory for YNAB import CSVs (default: {_CONFIG_DIR / 'output'})",
     )
-    parser.add_argument(
-        "--upload", action="store_true",
-        help="upload transactions directly to the YNAB API",
-    )
-    parser.add_argument(
+    upload.add_argument(
         "--dedup", action="store_true",
-        help="fetch existing YNAB transactions and filter duplicates before writing",
+        help="fetch existing YNAB transactions and filter duplicates before uploading",
     )
-    parser.add_argument(
+    upload.add_argument(
         "--budget-id", metavar="UUID",
         help="global YNAB budget ID; per-account value in accounts.toml takes precedence",
     )
-    parser.add_argument(
+    upload.add_argument(
         "--approve", action="store_true",
         help="mark uploaded transactions as approved in YNAB (skips manual approval step)",
     )
-    parser.add_argument(
+    upload.add_argument(
         "--reconcile", action="store_true",
         help="compare bank balance from CSV against YNAB cleared balance and report the diff",
     )
@@ -77,16 +77,19 @@ def run_init() -> None:
 
 def run_app() -> None:
     """Parse CLI arguments and dispatch to :func:`run_init` or :func:`~ynab.converter.convert_bank_transactions`."""
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
     if args.command == "init":
         run_init()
-    else:
+    elif args.command == "upload":
         convert_bank_transactions(
             input_dir=args.input_dir,
             output_dir=args.output_dir,
             dedup_enabled=args.dedup,
-            upload_enabled=args.upload,
+            upload_enabled=True,
             approve_enabled=args.approve,
             reconcile_enabled=args.reconcile,
             global_budget_id=args.budget_id,
         )
+    else:
+        parser.print_help()
