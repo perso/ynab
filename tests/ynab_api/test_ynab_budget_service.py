@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from ynab.bank.transaction import BankTransaction, TransactionStatus
 from ynab.budget_service import BudgetService
-from ynab.ynab_api.ynab_api_client import TransactionsResponse
+from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
 
 _CLEARED = TransactionStatus.CLEARED
@@ -37,3 +37,12 @@ class TestYnabBudgetServiceProtocol(unittest.TestCase):
         self.assertIsInstance(args[2], list)
         self.assertEqual(len(args[2]), 1)
         self.assertEqual(args[2][0]["payee_name"], "Shop")
+
+    @patch("ynab.ynab_api.ynab_budget_service.ynab_api_client.get_account")
+    def test_delegates_get_account_to_api_client(self, mock_get_account):
+        expected = YnabAccount(id="a1", name="Checking", cleared_balance=500000)
+        mock_get_account.return_value = expected
+        service = YnabBudgetService("tok")
+        result = service.get_account("b1", "a1")
+        mock_get_account.assert_called_once_with("tok", "b1", "a1")
+        self.assertEqual(result, expected)

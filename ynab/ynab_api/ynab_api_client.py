@@ -27,6 +27,14 @@ class TransactionsResponse(NamedTuple):
     server_knowledge: int
 
 
+class YnabAccount(NamedTuple):
+    """Subset of account fields returned by the YNAB accounts endpoint."""
+
+    id: str
+    name: str
+    cleared_balance: int
+
+
 class YnabApiError(Exception):
     """Raised when the YNAB API returns an unexpected response."""
 
@@ -128,3 +136,47 @@ def create_transactions(
         url, len(created_ids), len(duplicate_ids),
     )
     return len(created_ids)
+
+
+def get_account(
+    token: str,
+    budget_id: str,
+    account_id: str,
+) -> YnabAccount:
+    """Fetch a single account from the YNAB API.
+
+    Args:
+        token: YNAB personal access token.
+        budget_id: YNAB budget UUID.
+        account_id: YNAB account UUID.
+
+    Returns:
+        ``YnabAccount`` with id, name, and cleared_balance (milliunits).
+
+    Raises:
+        YnabApiError: On HTTP 429 (rate limit) or malformed response body.
+        requests.HTTPError: On other non-2xx HTTP errors.
+    """
+    url = f"{BASE_URL}/budgets/{budget_id}/accounts/{account_id}"
+    response = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+
+    if response.status_code == 429:
+        retry_after = response.headers.get("Retry-After", "unknown")
+        raise YnabApiError(
+            f"YNAB API rate limit reached. Retry after {retry_after} seconds."
+        )
+
+    response.raise_for_status()
+
+    try:
+        account = response.json()["data"]["account"]
+        result = YnabAccount(
+            id=account["id"],
+            name=account["name"],
+            cleared_balance=account["cleared_balance"],
+        )
+    except (KeyError, ValueError) as exc:
+        raise YnabApiError(f"Unexpected YNAB API response format: {exc}") from exc
+
+    log.info("GET %s → cleared_balance=%d", response.url, result.cleared_balance)
+    return result

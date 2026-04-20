@@ -10,7 +10,7 @@ from ynab.bank.transaction import BankTransaction
 from ynab.converter import convert_bank_transactions
 from ynab.utilities.config_util import AccountConfig
 from ynab.utilities.fs_util import FilePathMapping
-from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabTransaction
+from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount, YnabTransaction
 
 _ACCOUNT_CONFIG_SIMPLE = {"FI111": AccountConfig("Budget", None, None)}
 _ACCOUNT_CONFIG_DEDUP = {"FI111": AccountConfig("Budget", "b1", "a1")}
@@ -42,14 +42,24 @@ def _make_ynab_transaction(
     )
 
 
+_DEFAULT_YNAB_ACCOUNT = YnabAccount(id="a1", name="Checking", cleared_balance=100000)
+
+
 class _FakeBudgetService:
     """Test double for BudgetService — records calls and returns preset responses."""
 
-    def __init__(self, response: TransactionsResponse = _EMPTY_RESPONSE, created_count: int = 0) -> None:
+    def __init__(
+        self,
+        response: TransactionsResponse = _EMPTY_RESPONSE,
+        created_count: int = 0,
+        account: YnabAccount = _DEFAULT_YNAB_ACCOUNT,
+    ) -> None:
         self.response = response
         self.created_count = created_count
+        self.account = account
         self.calls: list[tuple] = []
         self.create_calls: list[tuple] = []
+        self.account_calls: list[tuple] = []
 
     def get_transactions(
         self,
@@ -68,6 +78,10 @@ class _FakeBudgetService:
     ) -> int:
         self.create_calls.append((budget_id, account_id, transactions, approved))
         return self.created_count
+
+    def get_account(self, budget_id: str, account_id: str) -> YnabAccount:
+        self.account_calls.append((budget_id, account_id))
+        return self.account
 
 
 class TestConvertBankTransactions(unittest.TestCase):
@@ -556,6 +570,131 @@ class TestConvertBankTransactionsWithDedupAndUpload(unittest.TestCase):
         os.removedirs(temp_dir)
 
 
+class TestConvertBankTransactionsWithReconcile(unittest.TestCase):
+    """Integration tests for the --reconcile path using _FakeBudgetService injection."""
+
+    def _run_reconcile(
+        self,
+        input_file: str,
+        output_file: str,
+        service: _FakeBudgetService,
+    ) -> None:
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(
+                budget_service_factory=lambda _token: service,
+                reconcile_enabled=True,
+            )
+
+    def test_get_account_called_with_correct_args(self):
+        service = _FakeBudgetService(account=YnabAccount("a1", "Checking", 100000))
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        self._run_reconcile(input_file, output_file, service)
+
+        self.assertEqual(len(service.account_calls), 1)
+        budget_id, account_id = service.account_calls[0]
+        self.assertEqual(budget_id, "b1")
+        self.assertEqual(account_id, "a1")
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_reconcile_skipped_when_no_balance_in_csv(self):
+        """All PENDING rows → balance is None → get_account not called."""
+        service = _FakeBudgetService()
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"";"Odottaa";"Ei"',
+        ])
+
+        self._run_reconcile(input_file, output_file, service)
+
+        self.assertEqual(service.account_calls, [])
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_reconcile_skipped_when_account_config_missing(self):
+        service = _FakeBudgetService()
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(
+                budget_service_factory=lambda _token: service,
+                reconcile_enabled=True,
+            )
+
+        self.assertEqual(service.account_calls, [])
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_credentials_loaded_when_reconcile_enabled(self):
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [])
+
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.converter.read_credentials_file", return_value="token") as mock_creds,
+        ):
+            convert_bank_transactions(reconcile_enabled=True)
+
+        mock_creds.assert_called_once()
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_balance_from_csv_used_regardless_of_cleared_status(self):
+        """Balance is taken from all transactions, not just CLEARED ones."""
+        # Only RECONCILED row has a balance — should still be captured
+        service = _FakeBudgetService(account=YnabAccount("a1", "Savings", 500000))
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"500,00";"Toteutunut";"Kyllä"',
+        ])
+
+        self._run_reconcile(input_file, output_file, service)
+
+        # get_account was called despite the row being RECONCILED (filtered from import)
+        self.assertEqual(len(service.account_calls), 1)
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+
 class TestRunApp(unittest.TestCase):
     @patch("ynab.cli.convert_bank_transactions")
     def test_run_app_calls_convert_with_defaults(self, mock_convert):
@@ -569,6 +708,7 @@ class TestRunApp(unittest.TestCase):
             dedup_enabled=False,
             upload_enabled=False,
             approve_enabled=False,
+            reconcile_enabled=False,
             global_budget_id=None,
         )
 
@@ -582,6 +722,7 @@ class TestRunApp(unittest.TestCase):
             "--upload",
             "--dedup",
             "--approve",
+            "--reconcile",
             "--budget-id", "b-uuid",
         ]):
             run_app()
@@ -591,6 +732,7 @@ class TestRunApp(unittest.TestCase):
             dedup_enabled=True,
             upload_enabled=True,
             approve_enabled=True,
+            reconcile_enabled=True,
             global_budget_id="b-uuid",
         )
 

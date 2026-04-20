@@ -4,7 +4,7 @@ from datetime import date
 from typing import List, Protocol, runtime_checkable
 
 from ynab.bank.transaction import BankTransaction
-from ynab.ynab_api.ynab_api_client import TransactionsResponse
+from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount
 
 
 @runtime_checkable
@@ -29,3 +29,5 @@ class BudgetService(Protocol):
         transactions: List[BankTransaction],
         approved: bool = False,
     ) -> int: ...
+
+    def get_account(self, budget_id: str, account_id: str) -> YnabAccount: ...
