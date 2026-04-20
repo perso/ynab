@@ -694,6 +694,36 @@ class TestConvertBankTransactionsWithReconcile(unittest.TestCase):
         os.remove(output_file)
         os.removedirs(temp_dir)
 
+    def test_balance_uses_most_recent_date_not_maximum_value(self):
+        """Reconciliation must compare the latest transaction's balance, not the peak balance.
+
+        With multiple transactions the running balance can go up and down.
+        Using max() would pick the numerically highest balance (an old peak),
+        producing a wrong diff.  The correct balance is the one attached to
+        the transaction with the latest date.
+        """
+        # Older transaction has a higher balance (1 500 €); newer one is lower (800 €).
+        # YNAB cleared balance is 800 €.  Diff must be 0, not 700.
+        service = _FakeBudgetService(account=YnabAccount("a1", "Checking", 800000))
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"01.01.2023";"Cat";"Sub";"Shop A";"-200,00";"1500,00";"Toteutunut";"Ei"',
+            '"01.02.2023";"Cat";"Sub";"Shop B";"-700,00";"800,00";"Toteutunut";"Ei"',
+        ])
+
+        with self.assertLogs("ynab.converter", level="INFO") as cm:
+            self._run_reconcile(input_file, output_file, service)
+
+        log_text = "\n".join(cm.output)
+        self.assertIn("Bank balance:   800.00", log_text)
+        self.assertIn("Difference:     0.00", log_text)
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
 
 class TestRunApp(unittest.TestCase):
     @patch("ynab.cli.convert_bank_transactions")

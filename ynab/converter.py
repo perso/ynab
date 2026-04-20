@@ -62,9 +62,10 @@ def convert_bank_transactions(
     for mapping in mappings:
         log.info("%s -> %s", mapping.input_path, mapping.output_path)
         all_transactions = source_factory(mapping.input_path)
-        last_bank_balance: Optional[float] = max(
-            (t.balance for t in all_transactions if t.balance is not None),
-            default=None,
+        transactions_with_balance = [t for t in all_transactions if t.balance is not None]
+        last_bank_balance: Optional[float] = (
+            max(transactions_with_balance, key=lambda t: t.date).balance
+            if transactions_with_balance else None
         )
         transactions = filter_unchecked_transactions(all_transactions)
         cfg = account_configs[mapping.account_no]
