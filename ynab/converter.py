@@ -27,6 +27,7 @@ def convert_bank_transactions(
     output_dir: str = str(_CONFIG_DIR / "output"),
     dedup_enabled: bool = False,
     upload_enabled: bool = False,
+    approve_enabled: bool = False,
     global_budget_id: Optional[str] = None,
 ) -> None:
     """Convert Finnish bank CSV exports to YNAB import CSVs.
@@ -92,7 +93,7 @@ def convert_bank_transactions(
                 )
             else:
                 count = budget_service.create_transactions(  # type: ignore[union-attr]
-                    effective_budget_id, cfg.account_id, transactions
+                    effective_budget_id, cfg.account_id, transactions, approved=approve_enabled
                 )
                 log.info(
                     "Uploaded %d transaction(s) to YNAB for account '%s'",

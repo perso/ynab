@@ -42,6 +42,7 @@ class YnabBudgetService:
         budget_id: str,
         account_id: str,
         transactions: List[BankTransaction],
+        approved: bool = False,
     ) -> int:
         """Upload bank transactions to a YNAB account.
 
@@ -52,7 +53,8 @@ class YnabBudgetService:
         :param budget_id: YNAB budget UUID to post transactions into.
         :param account_id: YNAB account UUID to associate each transaction with.
         :param transactions: Bank transactions to upload.
+        :param approved: Whether to mark each transaction as approved in YNAB.
         :returns: Number of transactions accepted by the YNAB API.
         """
-        payloads = to_api_payloads(transactions, account_id)
+        payloads = to_api_payloads(transactions, account_id, approved=approved)
         return ynab_api_client.create_transactions(self._token, budget_id, payloads)

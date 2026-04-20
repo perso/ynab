@@ -40,6 +40,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--budget-id", metavar="UUID",
         help="global YNAB budget ID; per-account value in accounts.toml takes precedence",
     )
+    parser.add_argument(
+        "--approve", action="store_true",
+        help="mark uploaded transactions as approved in YNAB (skips manual approval step)",
+    )
     return parser
 
 
@@ -78,5 +82,6 @@ def run_app() -> None:
             output_dir=args.output_dir,
             dedup_enabled=args.dedup,
             upload_enabled=args.upload,
+            approve_enabled=args.approve,
             global_budget_id=args.budget_id,
         )

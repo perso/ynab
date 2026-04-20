@@ -27,4 +27,5 @@ class BudgetService(Protocol):
         budget_id: str,
         account_id: str,
         transactions: List[BankTransaction],
+        approved: bool = False,
     ) -> int: ...

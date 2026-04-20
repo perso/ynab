@@ -30,6 +30,12 @@ class TestToApiPayload(unittest.TestCase):
         self.assertEqual(payload["cleared"], "cleared")
         self.assertIs(payload["approved"], False)
 
+    def test_approved_false_by_default(self):
+        self.assertIs(to_api_payload(_TXN, "acc-123")["approved"], False)
+
+    def test_approved_true_when_requested(self):
+        self.assertIs(to_api_payload(_TXN, "acc-123", approved=True)["approved"], True)
+
     def test_import_id_is_deterministic(self):
         p1 = to_api_payload(_TXN, "acc-123")
         p2 = to_api_payload(_TXN, "acc-123")

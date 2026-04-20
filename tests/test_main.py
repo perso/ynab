@@ -64,8 +64,9 @@ class _FakeBudgetService:
         budget_id: str,
         account_id: str,
         transactions: List[BankTransaction],
+        approved: bool = False,
     ) -> int:
-        self.create_calls.append((budget_id, account_id, transactions))
+        self.create_calls.append((budget_id, account_id, transactions, approved))
         return self.created_count
 
 
@@ -374,7 +375,7 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
         self._run_with_fake_service(input_file, output_file, service, _ACCOUNT_CONFIG_DEDUP)
 
         self.assertEqual(len(service.create_calls), 1)
-        budget_id, account_id, txns = service.create_calls[0]
+        budget_id, account_id, txns, _approved = service.create_calls[0]
         self.assertEqual(budget_id, "b1")
         self.assertEqual(account_id, "a1")
         self.assertEqual(len(txns), 1)
@@ -454,8 +455,63 @@ class TestConvertBankTransactionsWithUpload(unittest.TestCase):
             )
 
         self.assertEqual(len(service.create_calls), 1)
-        budget_id_used, _, _ = service.create_calls[0]
+        budget_id_used, _, _, _approved = service.create_calls[0]
         self.assertEqual(budget_id_used, "env-budget-id")
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_approve_enabled_passed_to_create_transactions(self):
+        service = _FakeBudgetService(created_count=1)
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(
+                budget_service_factory=lambda _token: service,
+                upload_enabled=True,
+                approve_enabled=True,
+            )
+
+        _budget_id, _account_id, _txns, approved = service.create_calls[0]
+        self.assertTrue(approved)
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_approve_disabled_by_default(self):
+        service = _FakeBudgetService(created_count=1)
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(
+                budget_service_factory=lambda _token: service,
+                upload_enabled=True,
+            )
+
+        _budget_id, _account_id, _txns, approved = service.create_calls[0]
+        self.assertFalse(approved)
 
         os.remove(input_file)
         os.remove(output_file)
@@ -490,7 +546,7 @@ class TestConvertBankTransactionsWithDedupAndUpload(unittest.TestCase):
         self.assertEqual(len(service.calls), 1)
         # Upload ran
         self.assertEqual(len(service.create_calls), 1)
-        budget_id, account_id, txns = service.create_calls[0]
+        budget_id, account_id, txns, _approved = service.create_calls[0]
         self.assertEqual(budget_id, "b1")
         self.assertEqual(account_id, "a1")
         self.assertEqual(len(txns), 1)
@@ -512,6 +568,7 @@ class TestRunApp(unittest.TestCase):
             output_dir=str(_CONFIG_DIR / "output"),
             dedup_enabled=False,
             upload_enabled=False,
+            approve_enabled=False,
             global_budget_id=None,
         )
 
@@ -524,6 +581,7 @@ class TestRunApp(unittest.TestCase):
             "--output-dir", "/tmp/out",
             "--upload",
             "--dedup",
+            "--approve",
             "--budget-id", "b-uuid",
         ]):
             run_app()
@@ -532,6 +590,7 @@ class TestRunApp(unittest.TestCase):
             output_dir="/tmp/out",
             dedup_enabled=True,
             upload_enabled=True,
+            approve_enabled=True,
             global_budget_id="b-uuid",
         )
 
