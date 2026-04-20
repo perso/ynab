@@ -81,10 +81,7 @@ def filter_already_in_ynab(
             pool.pop(best_idx)
 
     filtered = len(bank_transactions) - len(kept)
-    log.info(
-        "Dedup: %d bank transaction(s) in, %d matched in YNAB, %d remaining",
-        len(bank_transactions), filtered, len(kept),
-    )
+    log.info("  Dedup: %d matched, %d new", filtered, len(kept))
     return kept
 
 

@@ -717,8 +717,8 @@ class TestConvertBankTransactionsWithReconcile(unittest.TestCase):
             self._run_reconcile(input_file, output_file, service)
 
         log_text = "\n".join(cm.output)
-        self.assertIn("Bank balance:   800.00", log_text)
-        self.assertIn("Difference:     0.00", log_text)
+        self.assertIn("Bank balance:  800.00", log_text)
+        self.assertIn("Difference:    0.00", log_text)
 
         os.remove(input_file)
         os.remove(output_file)

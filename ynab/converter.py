@@ -60,7 +60,7 @@ def convert_bank_transactions(
     )
 
     for mapping in mappings:
-        log.info("%s -> %s", mapping.input_path, mapping.output_path)
+        log.info("\n%s  →  %s", mapping.account_no, Path(mapping.output_path).name)
         all_transactions = source_factory(mapping.input_path)
         transactions_with_balance = [t for t in all_transactions if t.balance is not None]
         last_bank_balance: Optional[float] = (
@@ -94,29 +94,23 @@ def convert_bank_transactions(
         if upload_enabled and transactions:
             if not effective_budget_id or not cfg.account_id:
                 log.warning(
-                    "Upload skipped for account '%s': set 'account_id' in accounts.toml "
-                    "and either 'budget_id' in accounts.toml or pass --budget-id.",
+                    "  Upload skipped: missing account_id or budget_id in config for '%s'",
                     mapping.account_no,
                 )
             else:
-                count = budget_service.create_transactions(  # type: ignore[union-attr]
+                budget_service.create_transactions(  # type: ignore[union-attr]
                     effective_budget_id, cfg.account_id, transactions, approved=approve_enabled
-                )
-                log.info(
-                    "Uploaded %d transaction(s) to YNAB for account '%s'",
-                    count, mapping.account_no,
                 )
 
         if reconcile_enabled:
             if not effective_budget_id or not cfg.account_id:
                 log.warning(
-                    "Reconciliation skipped for account '%s': set 'account_id' in accounts.toml "
-                    "and either 'budget_id' in accounts.toml or pass --budget-id.",
+                    "  Reconciliation skipped: missing account_id or budget_id in config for '%s'",
                     mapping.account_no,
                 )
             elif last_bank_balance is None:
                 log.warning(
-                    "Reconciliation skipped for account '%s': no balance found in bank CSV.",
+                    "  Reconciliation skipped for '%s': no balance found in bank CSV",
                     mapping.account_no,
                 )
             else:
@@ -126,7 +120,7 @@ def convert_bank_transactions(
                 ynab_cleared = account.cleared_balance / 1000.0
                 diff = last_bank_balance - ynab_cleared
                 status = "✓" if diff == 0 else "✗"
-                log.info("Reconciliation for account '%s' (%s):", mapping.account_no, account.name)
-                log.info("  Bank balance:   %.2f", last_bank_balance)
-                log.info("  YNAB cleared:   %.2f", ynab_cleared)
-                log.info("  Difference:     %.2f  %s", diff, status)
+                log.info("  Reconciliation (%s):", account.name)
+                log.info("    Bank balance:  %.2f", last_bank_balance)
+                log.info("    YNAB cleared:  %.2f", ynab_cleared)
+                log.info("    Difference:    %.2f  %s", diff, status)

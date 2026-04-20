@@ -86,7 +86,7 @@ def get_transactions(
         YnabTransaction(**{field: t[field] for field in YnabTransaction._fields})
         for t in raw_transactions
     ]
-    log.info("GET %s → %d transactions, server_knowledge=%d", response.url, len(transactions), server_knowledge)
+    log.info("  Fetched %d transactions since %s", len(transactions), since_date)
     return TransactionsResponse(transactions=transactions, server_knowledge=server_knowledge)
 
 
@@ -131,10 +131,7 @@ def create_transactions(
     except (KeyError, ValueError) as exc:
         raise YnabApiError(f"Unexpected YNAB API response format: {exc}") from exc
 
-    log.info(
-        "POST %s → %d created, %d duplicates skipped",
-        url, len(created_ids), len(duplicate_ids),
-    )
+    log.info("  Uploaded %d new, %d already in YNAB", len(created_ids), len(duplicate_ids))
     return len(created_ids)
 
 
@@ -178,5 +175,4 @@ def get_account(
     except (KeyError, ValueError) as exc:
         raise YnabApiError(f"Unexpected YNAB API response format: {exc}") from exc
 
-    log.info("GET %s → cleared_balance=%d", response.url, result.cleared_balance)
     return result
