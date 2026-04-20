@@ -23,7 +23,6 @@ _DELIMITER = ";"
 
 # Tila column values
 _TILA_TOTEUTUNUT = "Toteutunut"  # transaction has been executed / cleared by the bank
-_TILA_ODOTTAA = "Odottaa"        # transaction is pending / waiting to settle
 
 # Tarkastettu column values (user-placed checkmark in the bank app, no financial meaning)
 _TARKASTETTU_KYLLA = "Kyllä"
