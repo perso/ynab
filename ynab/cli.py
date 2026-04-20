@@ -62,21 +62,22 @@ def run_init() -> None:
 
     accounts_path = _CONFIG_DIR / "accounts.toml"
     if accounts_path.exists():
-        log.info("accounts.toml already exists, skipping: %s", accounts_path)
+        log.info("Already set up. Configuration directory: %s", _CONFIG_DIR)
+        log.info("Edit %s to update your accounts.", accounts_path)
+        log.info("Run: ynab upload")
     else:
         template = files("ynab.templates").joinpath("accounts.toml.example").read_text(encoding="utf-8")
         accounts_path.write_text(template)
-        log.info("Created %s", accounts_path)
-
-    log.info("Configuration directory ready: %s", _CONFIG_DIR)
-    log.info("Next steps:")
-    log.info("  1. Edit %s", accounts_path)
-    log.info("  2. Place bank export CSVs in %s", _CONFIG_DIR / "input")
-    log.info("  3. Run: ynab")
+        log.info("Configuration directory ready: %s", _CONFIG_DIR)
+        log.info("Next steps:")
+        log.info("  1. Edit %s", accounts_path)
+        log.info("  2. Place bank export CSVs in %s", _CONFIG_DIR / "input")
+        log.info("  3. Run: ynab upload")
 
 
 def run_app() -> None:
     """Parse CLI arguments and dispatch to :func:`run_init` or :func:`~ynab.converter.convert_bank_transactions`."""
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = build_parser()
     args = parser.parse_args()
     if args.command == "init":
