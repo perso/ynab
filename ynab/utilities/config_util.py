@@ -33,6 +33,14 @@ def read_credentials_file(file_path: str = str(_DEFAULT_CREDENTIALS)) -> str:
         )
 
 
+class TrackingAccountConfig(NamedTuple):
+    """Configuration for a YNAB tracking account (investment, mortgage, loan, etc.)."""
+
+    name: str
+    budget_id: str
+    account_id: str
+
+
 class AccountConfig(NamedTuple):
     """Per-account configuration for YNAB integration."""
 
@@ -40,6 +48,7 @@ class AccountConfig(NamedTuple):
     budget_id: Optional[str]
     account_id: Optional[str]
     date_tolerance_days: Optional[int] = None
+    memo_template: Optional[str] = None
 
 
 def read_accounts_config(path: Union[str, Path]) -> Dict[str, AccountConfig]:
@@ -87,5 +96,52 @@ def read_accounts_config(path: Union[str, Path]) -> Dict[str, AccountConfig]:
             budget_id=cfg.get("budget_id"),
             account_id=cfg.get("account_id"),
             date_tolerance_days=cfg.get("date_tolerance_days"),
+            memo_template=cfg.get("memo_template"),
+        )
+    return result
+
+
+def read_tracking_accounts_config(path: Union[str, Path]) -> Dict[str, TrackingAccountConfig]:
+    """Read tracking account configuration from a TOML file.
+
+    Expected format::
+
+        [tracking_accounts.nordnet]
+        name       = "Nordnet Investments"
+        budget_id  = "ynab-budget-uuid"
+        account_id = "ynab-account-uuid"
+
+    All three keys are required for each tracking account.
+
+    Args:
+        path: Path to the TOML config file (same file as ``read_accounts_config``).
+
+    Returns:
+        Mapping of slug to ``TrackingAccountConfig``, preserving TOML order.
+        Empty dict if the ``[tracking_accounts]`` section is absent.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If any required key is missing from a tracking account entry.
+    """
+    p = Path(path)
+    try:
+        with open(p, "rb") as f:
+            data = tomllib.load(f)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Accounts config file not found at {p}")
+
+    tracking = data.get("tracking_accounts", {})
+    result: Dict[str, TrackingAccountConfig] = {}
+    for slug, cfg in tracking.items():
+        for required in ("name", "budget_id", "account_id"):
+            if required not in cfg:
+                raise ValueError(
+                    f"Tracking account '{slug}' is missing required key '{required}'"
+                )
+        result[slug] = TrackingAccountConfig(
+            name=cfg["name"],
+            budget_id=cfg["budget_id"],
+            account_id=cfg["account_id"],
         )
     return result

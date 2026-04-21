@@ -3,7 +3,7 @@ from datetime import date
 from hashlib import sha256
 
 from ynab.bank.transaction import BankTransaction, TransactionStatus
-from ynab.ynab_api.transaction_uploader import to_api_payload, to_api_payloads
+from ynab.ynab_api.transaction_uploader import to_adjustment_payload, to_api_payload, to_api_payloads
 
 _CLEARED = TransactionStatus.CLEARED
 
@@ -93,6 +93,20 @@ class TestToApiPayload(unittest.TestCase):
         self.assertEqual(to_api_payload(_TXN_NO_BALANCE, "acc-123")["import_id"], expected)
 
 
+class TestToApiPayloadMemo(unittest.TestCase):
+    def test_memo_absent_by_default(self):
+        payload = to_api_payload(_TXN, "acc-123")
+        self.assertNotIn("memo", payload)
+
+    def test_memo_included_when_provided(self):
+        payload = to_api_payload(_TXN, "acc-123", memo="Food / Cafe")
+        self.assertEqual(payload["memo"], "Food / Cafe")
+
+    def test_memo_absent_when_empty_string(self):
+        payload = to_api_payload(_TXN, "acc-123", memo="")
+        self.assertNotIn("memo", payload)
+
+
 class TestToApiPayloads(unittest.TestCase):
     def test_returns_one_payload_per_transaction(self):
         txns = [_TXN, _TXN._replace(payee="Other")]
@@ -103,3 +117,59 @@ class TestToApiPayloads(unittest.TestCase):
 
     def test_empty_list_returns_empty(self):
         self.assertEqual(to_api_payloads([], "acc-123"), [])
+
+    def test_memo_template_applied_to_all(self):
+        txns = [_TXN, _TXN._replace(category="Other", sub_category="Sub2")]
+        result = to_api_payloads(txns, "acc-123", memo_template="{category} / {sub_category}")
+        self.assertEqual(result[0]["memo"], "Cat / Sub")
+        self.assertEqual(result[1]["memo"], "Other / Sub2")
+
+    def test_no_memo_when_template_absent(self):
+        result = to_api_payloads([_TXN], "acc-123")
+        self.assertNotIn("memo", result[0])
+
+
+_ADJ_DATE = date(2026, 4, 21)
+_ADJ_ACCOUNT = "acc-track-1"
+
+
+class TestToAdjustmentPayload(unittest.TestCase):
+    def _make(self, adjustment: int = 5000, new_balance: int = 45000) -> dict:
+        return to_adjustment_payload(_ADJ_ACCOUNT, adjustment, new_balance, _ADJ_DATE)
+
+    def test_required_fields_present(self):
+        p = self._make()
+        self.assertEqual(p["account_id"], _ADJ_ACCOUNT)
+        self.assertEqual(p["date"], "2026-04-21")
+        self.assertEqual(p["amount"], 5000)
+        self.assertEqual(p["payee_name"], "Manual Balance Update")
+        self.assertEqual(p["cleared"], "reconciled")
+        self.assertIs(p["approved"], True)
+        self.assertIn("memo", p)
+
+    def test_import_id_max_36_chars(self):
+        self.assertLessEqual(len(self._make()["import_id"]), 36)
+
+    def test_import_id_is_deterministic(self):
+        self.assertEqual(self._make()["import_id"], self._make()["import_id"])
+
+    def test_import_id_differs_by_date(self):
+        p1 = to_adjustment_payload(_ADJ_ACCOUNT, 5000, 45000, date(2026, 4, 21))
+        p2 = to_adjustment_payload(_ADJ_ACCOUNT, 5000, 45000, date(2026, 4, 22))
+        self.assertNotEqual(p1["import_id"], p2["import_id"])
+
+    def test_import_id_differs_by_account(self):
+        p1 = to_adjustment_payload("acc-1", 5000, 45000, _ADJ_DATE)
+        p2 = to_adjustment_payload("acc-2", 5000, 45000, _ADJ_DATE)
+        self.assertNotEqual(p1["import_id"], p2["import_id"])
+
+    def test_import_id_differs_by_new_balance(self):
+        p1 = to_adjustment_payload(_ADJ_ACCOUNT, 5000, 45000, _ADJ_DATE)
+        p2 = to_adjustment_payload(_ADJ_ACCOUNT, 5000, 46000, _ADJ_DATE)
+        self.assertNotEqual(p1["import_id"], p2["import_id"])
+
+    def test_import_id_matches_expected_hash(self):
+        expected = sha256(
+            f"adj|2026-04-21|{_ADJ_ACCOUNT}|45000".encode()
+        ).hexdigest()[:36]
+        self.assertEqual(self._make(new_balance=45000)["import_id"], expected)

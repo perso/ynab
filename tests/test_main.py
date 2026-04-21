@@ -1,9 +1,10 @@
+import datetime
 import os
 import sys
 import unittest
 from datetime import date
 from tempfile import mkdtemp
-from typing import List
+from typing import List, Optional
 from unittest.mock import patch
 
 from ynab.bank.transaction import BankTransaction
@@ -75,9 +76,20 @@ class _FakeBudgetService:
         account_id: str,
         transactions: List[BankTransaction],
         approved: bool = False,
+        memo_template: Optional[str] = None,
     ) -> int:
         self.create_calls.append((budget_id, account_id, transactions, approved))
         return self.created_count
+
+    def create_adjustment(
+        self,
+        budget_id: str,
+        account_id: str,
+        adjustment_milliunits: int,
+        new_balance_milliunits: int,
+        on_date: datetime.date,
+    ) -> None:
+        pass  # not exercised by bank-import integration tests
 
     def get_account(self, budget_id: str, account_id: str) -> YnabAccount:
         self.account_calls.append((budget_id, account_id))

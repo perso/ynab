@@ -4,7 +4,13 @@ import unittest
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from ynab.utilities.config_util import AccountConfig, read_accounts_config, read_credentials_file
+from ynab.utilities.config_util import (
+    AccountConfig,
+    TrackingAccountConfig,
+    read_accounts_config,
+    read_credentials_file,
+    read_tracking_accounts_config,
+)
 
 
 class TestConfigUtil(unittest.TestCase):
@@ -132,4 +138,100 @@ budget_name = "MyAccount"
 """)
         result = read_accounts_config(path)
         self.assertIsNone(result["FI123"].date_tolerance_days)
+
+    def test_memo_template_parsed(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name   = "MyAccount"
+memo_template = "{category} / {sub_category}"
+""")
+        result = read_accounts_config(path)
+        self.assertEqual(result["FI123"].memo_template, "{category} / {sub_category}")
         os.remove(path)
+
+    def test_memo_template_absent_is_none(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "MyAccount"
+""")
+        result = read_accounts_config(path)
+        self.assertIsNone(result["FI123"].memo_template)
+        os.remove(path)
+
+
+class TestReadTrackingAccountsConfig(unittest.TestCase):
+    def test_full_config(self):
+        path = _write_toml("""
+[tracking_accounts.nordnet]
+name       = "Nordnet Investments"
+budget_id  = "b1"
+account_id = "a1"
+""")
+        result = read_tracking_accounts_config(path)
+        self.assertEqual(result, {"nordnet": TrackingAccountConfig("Nordnet Investments", "b1", "a1")})
+        os.remove(path)
+
+    def test_multiple_accounts_preserves_order(self):
+        path = _write_toml("""
+[tracking_accounts.nordnet]
+name       = "Nordnet"
+budget_id  = "b1"
+account_id = "a1"
+
+[tracking_accounts.mortgage]
+name       = "Mortgage"
+budget_id  = "b1"
+account_id = "a2"
+""")
+        result = read_tracking_accounts_config(path)
+        slugs = list(result.keys())
+        self.assertEqual(slugs, ["nordnet", "mortgage"])
+        self.assertEqual(result["mortgage"], TrackingAccountConfig("Mortgage", "b1", "a2"))
+        os.remove(path)
+
+    def test_absent_section_returns_empty_dict(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "Checking"
+""")
+        result = read_tracking_accounts_config(path)
+        self.assertEqual(result, {})
+        os.remove(path)
+
+    def test_missing_name_raises(self):
+        path = _write_toml("""
+[tracking_accounts.nordnet]
+budget_id  = "b1"
+account_id = "a1"
+""")
+        with self.assertRaises(ValueError) as ctx:
+            read_tracking_accounts_config(path)
+        self.assertIn("nordnet", str(ctx.exception))
+        self.assertIn("name", str(ctx.exception))
+        os.remove(path)
+
+    def test_missing_budget_id_raises(self):
+        path = _write_toml("""
+[tracking_accounts.nordnet]
+name       = "Nordnet"
+account_id = "a1"
+""")
+        with self.assertRaises(ValueError) as ctx:
+            read_tracking_accounts_config(path)
+        self.assertIn("budget_id", str(ctx.exception))
+        os.remove(path)
+
+    def test_missing_account_id_raises(self):
+        path = _write_toml("""
+[tracking_accounts.nordnet]
+name      = "Nordnet"
+budget_id = "b1"
+""")
+        with self.assertRaises(ValueError) as ctx:
+            read_tracking_accounts_config(path)
+        self.assertIn("account_id", str(ctx.exception))
+        os.remove(path)
+
+    def test_missing_file_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            read_tracking_accounts_config("/nonexistent/accounts.toml")
