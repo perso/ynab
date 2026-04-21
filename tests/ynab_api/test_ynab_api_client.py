@@ -51,7 +51,7 @@ class TestYnabApiClient(unittest.TestCase):
 
         self.assertEqual(result, TransactionsResponse([_SAMPLE_TRANSACTION], 42))
         mock_get.assert_called_once_with(
-            "https://api.ynab.com/v1/budgets/test_budget_id/transactions",
+            "https://api.ynab.com/v1/plans/test_budget_id/transactions",
             headers={"Authorization": "Bearer test_token"},
             params={"since_date": "2023-01-01"},
         )
@@ -137,7 +137,7 @@ class TestYnabApiClientCreateTransactions(unittest.TestCase):
         create_transactions("tok", "bud", [_SAMPLE_PAYLOAD])
 
         mock_post.assert_called_once_with(
-            "https://api.ynab.com/v1/budgets/bud/transactions",
+            "https://api.ynab.com/v1/plans/bud/transactions",
             headers={"Authorization": "Bearer tok", "Content-Type": "application/json"},
             json={"transactions": [_SAMPLE_PAYLOAD]},
         )
@@ -205,7 +205,7 @@ class TestGetAccount(unittest.TestCase):
 
         self.assertEqual(result, YnabAccount(id="a1", name="Checking", cleared_balance=1234567))
         mock_get.assert_called_once_with(
-            "https://api.ynab.com/v1/budgets/budget-id/accounts/a1",
+            "https://api.ynab.com/v1/plans/budget-id/accounts/a1",
             headers={"Authorization": "Bearer token"},
         )
 

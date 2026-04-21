@@ -4,7 +4,7 @@ from hashlib import sha256
 from typing import Any, Dict, List
 
 from ynab.bank.duplicate_filter import to_milliunits
-from ynab.bank.transaction import BankTransaction
+from ynab.bank.transaction import BankTransaction, TransactionStatus
 
 
 def to_api_payload(txn: BankTransaction, account_id: str, approved: bool = False) -> Dict[str, Any]:
@@ -25,12 +25,13 @@ def to_api_payload(txn: BankTransaction, account_id: str, approved: bool = False
     import_id = sha256(
         f"{txn.date.isoformat()}|{milliunits}|{txn.payee}{balance_part}".encode()
     ).hexdigest()[:36]
+    cleared = "reconciled" if txn.status == TransactionStatus.RECONCILED else "cleared"
     return {
         "account_id": account_id,
         "date": txn.date.isoformat(),
         "amount": milliunits,
         "payee_name": txn.payee,
-        "cleared": "cleared",
+        "cleared": cleared,
         "approved": approved,
         "import_id": import_id,
     }

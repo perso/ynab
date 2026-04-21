@@ -38,6 +38,14 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - `ynab/utilities/` — CSV/date/amount parsing, filesystem helpers, credentials and TOML config loading
 - `tests/` — mirrors `ynab/` structure
 
+## YNAB API reference
+
+Always fetch the latest specs directly — do not rely on locally copied files.
+
+- **API introduction & concepts** (auth, milliunits, rate limits, delta requests): `https://api.ynab.com`
+- **OpenAPI spec** (all endpoints, request/response schemas): `https://api.ynab.com/papi/open_api_spec.yaml`
+- **Rendered endpoint reference**: `https://api.ynab.com/v1`
+
 ## Workflow rules
 
 After making ANY code changes, always:

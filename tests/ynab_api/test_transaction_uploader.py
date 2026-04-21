@@ -30,6 +30,10 @@ class TestToApiPayload(unittest.TestCase):
         self.assertEqual(payload["cleared"], "cleared")
         self.assertIs(payload["approved"], False)
 
+    def test_cleared_status_reconciled(self):
+        txn = _TXN._replace(status=TransactionStatus.RECONCILED)
+        self.assertEqual(to_api_payload(txn, "acc-123")["cleared"], "reconciled")
+
     def test_approved_false_by_default(self):
         self.assertIs(to_api_payload(_TXN, "acc-123")["approved"], False)
 

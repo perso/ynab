@@ -63,7 +63,7 @@ def get_transactions(
         requests.HTTPError: On other non-2xx HTTP errors.
     """
     query: Dict[str, Any] = {"since_date": since_date.isoformat()}
-    url = f"{BASE_URL}/budgets/{budget_id}/transactions"
+    url = f"{BASE_URL}/plans/{budget_id}/transactions"
 
     response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, params=query)
 
@@ -109,7 +109,7 @@ def create_transactions(
         YnabApiError: On HTTP 429 (rate limit) or malformed response body.
         requests.HTTPError: On other non-2xx HTTP errors.
     """
-    url = f"{BASE_URL}/budgets/{budget_id}/transactions"
+    url = f"{BASE_URL}/plans/{budget_id}/transactions"
     response = requests.post(
         url,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
@@ -154,7 +154,7 @@ def get_account(
         YnabApiError: On HTTP 429 (rate limit) or malformed response body.
         requests.HTTPError: On other non-2xx HTTP errors.
     """
-    url = f"{BASE_URL}/budgets/{budget_id}/accounts/{account_id}"
+    url = f"{BASE_URL}/plans/{budget_id}/accounts/{account_id}"
     response = requests.get(url, headers={"Authorization": f"Bearer {token}"})
 
     if response.status_code == 429:
