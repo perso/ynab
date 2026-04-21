@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     upload.add_argument(
         "input_dir", nargs="?", default=str(_CONFIG_DIR / "input"), metavar="PATH",
-        help=f"directory containing bank export CSVs (default: {_CONFIG_DIR / 'input'})",
+        help=f"CSV file or directory of CSV files to import (default: {_CONFIG_DIR / 'input'})",
     )
     upload.add_argument(
         "--output-dir", default=str(_CONFIG_DIR / "output"), metavar="PATH",

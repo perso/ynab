@@ -101,6 +101,47 @@ class TestFileSystemUtil(unittest.TestCase):
         os.remove(csv_file)
         os.removedirs(temp_dir)
 
+    def test_form_file_paths_single_file(self):
+        temp_dir = mkdtemp()
+        csv_file = f"{temp_dir}/FI1234567890_2023.03.24-2023.04.24.csv"
+        open(csv_file, mode="w")
+
+        budget_map = {"FI1234567890": "TestBudget"}
+        paths = form_file_paths(input_dir=csv_file, output_dir=temp_dir, accountno_budget_map=budget_map)
+
+        self.assertEqual(len(paths), 1)
+        self.assertEqual(paths[0].input_path, csv_file)
+        self.assertEqual(paths[0].output_path, f"{temp_dir}/TestBudget_2023.03.24-2023.04.24.csv")
+
+        os.remove(csv_file)
+        os.removedirs(temp_dir)
+
+    def test_form_file_paths_single_file_unknown_account(self):
+        temp_dir = mkdtemp()
+        csv_file = f"{temp_dir}/UNKNOWN_2023.csv"
+        open(csv_file, mode="w")
+
+        with self.assertLogs("ynab.utilities.fs_util", level="WARNING") as cm:
+            paths = form_file_paths(input_dir=csv_file, output_dir=temp_dir, accountno_budget_map={})
+        self.assertEqual([], paths)
+        self.assertTrue(any("UNKNOWN" in msg for msg in cm.output))
+
+        os.remove(csv_file)
+        os.removedirs(temp_dir)
+
+    def test_form_file_paths_single_file_bad_filename(self):
+        temp_dir = mkdtemp()
+        csv_file = f"{temp_dir}/export.csv"
+        open(csv_file, mode="w")
+
+        with self.assertLogs("ynab.utilities.fs_util", level="WARNING") as cm:
+            paths = form_file_paths(input_dir=csv_file, output_dir=temp_dir, accountno_budget_map={})
+        self.assertEqual([], paths)
+        self.assertTrue(any("export.csv" in msg for msg in cm.output))
+
+        os.remove(csv_file)
+        os.removedirs(temp_dir)
+
     def test_form_file_paths_suffix_with_multiple_underscores(self):
         temp_dir = mkdtemp()
         test_file = f"{temp_dir}/FI123_2023_04_export.csv"

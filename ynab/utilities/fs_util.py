@@ -18,13 +18,15 @@ def form_file_paths(
     output_dir: str,
     accountno_budget_map: Dict[str, str],
 ) -> List[FilePathMapping]:
-    """Map bank export CSVs in ``input_dir`` to YNAB import paths in ``output_dir``.
+    """Map bank export CSV(s) to YNAB import paths in ``output_dir``.
 
-    Input filenames must follow the format ``<account_no>_<suffix>.csv``.
-    The output filename becomes ``<budget_name>_<suffix>.csv``.
+    ``input_dir`` may be a directory (all ``*.csv`` files are scanned) or a
+    path to a single CSV file.  Input filenames must follow the format
+    ``<account_no>_<suffix>.csv``.  The output filename becomes
+    ``<budget_name>_<suffix>.csv``.
 
     Args:
-        input_dir: Directory containing bank export CSV files.
+        input_dir: Directory containing bank export CSV files, or a single CSV file.
         output_dir: Directory for the generated YNAB import CSV files.
         accountno_budget_map: Mapping of account number to YNAB budget name.
 
@@ -35,7 +37,8 @@ def form_file_paths(
     output_path = Path(output_dir)
     file_paths = []
 
-    for csv_file in input_path.glob("*.csv"):
+    csv_files = [input_path] if input_path.is_file() else list(input_path.glob("*.csv"))
+    for csv_file in csv_files:
         parts = csv_file.stem.split("_", maxsplit=1)
         if len(parts) != 2:
             log.warning("Skipping '%s': filename does not match '<account_no>_<suffix>.csv'", csv_file.name)
