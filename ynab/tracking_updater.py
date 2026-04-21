@@ -124,3 +124,58 @@ def run_tracking_update(
     token = read_credentials_file()
     budget_service = budget_service_factory(token)
     update_tracking_accounts(budget_service, configs, today=datetime.date.today())
+
+
+def set_tracking_account(
+    budget_service: BudgetService,
+    cfg: TrackingAccountConfig,
+    new_balance: float,
+    *,
+    today: datetime.date,
+) -> None:
+    """Set a single tracking account to a specific balance without prompting.
+
+    Fetches the current YNAB cleared balance and posts an adjustment only when
+    the new balance differs.  No-ops when the balance is already correct.
+    """
+    account = budget_service.get_account(cfg.budget_id, cfg.account_id)
+    new_milliunits = to_milliunits(new_balance)
+    adjustment_milliunits = new_milliunits - account.cleared_balance
+
+    if adjustment_milliunits == 0:
+        log.info("%s: no change (already %.2f).", cfg.name, new_balance)
+        return
+
+    budget_service.create_adjustment(
+        cfg.budget_id,
+        cfg.account_id,
+        adjustment_milliunits,
+        new_milliunits,
+        today,
+    )
+
+    adjustment = adjustment_milliunits / 1000.0
+    sign = "+" if adjustment >= 0 else ""
+    log.info("%s: adjustment %s%.2f  ✓", cfg.name, sign, adjustment)
+
+
+def run_tracking_set(
+    slug: str,
+    new_balance: float,
+    budget_service_factory: Callable[[str], BudgetService] = YnabBudgetService,  # type: ignore[assignment]
+) -> None:
+    """Non-interactive entry point: set one tracking account to a given balance.
+
+    Exits with status 1 if *slug* is not present in the config.
+    """
+    config_path = str(_CONFIG_DIR / "accounts.toml")
+    tracking_configs_by_slug: Dict[str, TrackingAccountConfig] = read_tracking_accounts_config(config_path)
+
+    if slug not in tracking_configs_by_slug:
+        log.error("Unknown tracking account slug '%s'. Check %s.", slug, config_path)
+        raise SystemExit(1)
+
+    cfg = tracking_configs_by_slug[slug]
+    token = read_credentials_file()
+    budget_service = budget_service_factory(token)
+    set_tracking_account(budget_service, cfg, new_balance, today=datetime.date.today())

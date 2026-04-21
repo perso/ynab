@@ -5,7 +5,7 @@ import logging
 from importlib.resources import files
 
 from ynab.converter import _CONFIG_DIR, convert_bank_transactions
-from ynab.tracking_updater import run_tracking_update
+from ynab.tracking_updater import run_tracking_set, run_tracking_update
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +63,13 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    tracking_set = tracking_sub.add_parser(
+        "set",
+        help="non-interactively set a tracking account to a specific balance",
+    )
+    tracking_set.add_argument("slug", help="account slug as defined in accounts.toml")
+    tracking_set.add_argument("amount", type=float, help="new balance to set")
+
     return parser
 
 
@@ -110,6 +117,8 @@ def run_app() -> None:
     elif args.command == "tracking":
         if getattr(args, "tracking_command", None) == "update":
             run_tracking_update()
+        elif getattr(args, "tracking_command", None) == "set":
+            run_tracking_set(args.slug, args.amount)
         else:
             parser.parse_args(["tracking", "--help"])
     else:

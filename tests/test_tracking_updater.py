@@ -4,7 +4,7 @@ import datetime
 import unittest
 from typing import List, Optional
 
-from ynab.tracking_updater import update_tracking_accounts
+from ynab.tracking_updater import set_tracking_account, update_tracking_accounts
 from ynab.utilities.config_util import TrackingAccountConfig
 from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount
 
@@ -162,3 +162,39 @@ class TestUpdateTrackingAccounts(unittest.TestCase):
         )
         _, _, adj, _, _ = svc.adjustment_calls[0]
         self.assertEqual(adj, -500_000)
+
+
+class TestSetTrackingAccount(unittest.TestCase):
+    def test_posts_adjustment_when_balance_changes(self):
+        svc = _FakeService({"acc-nordnet": _ACCOUNT_NORDNET})
+        set_tracking_account(svc, _CFG_NORDNET, 45_230.50, today=_TODAY)
+        self.assertEqual(len(svc.adjustment_calls), 1)
+        _budget, _acc, adj, new_bal, on_date = svc.adjustment_calls[0]
+        self.assertEqual(adj, 730_500)       # 45230.50 - 44500.00 = 730.50 → 730500 mu
+        self.assertEqual(new_bal, 45_230_500)
+        self.assertEqual(on_date, _TODAY)
+
+    def test_no_adjustment_when_balance_unchanged(self):
+        svc = _FakeService({"acc-nordnet": _ACCOUNT_NORDNET})
+        set_tracking_account(svc, _CFG_NORDNET, 44_500.00, today=_TODAY)
+        self.assertEqual(svc.adjustment_calls, [])
+
+    def test_negative_adjustment_for_loss(self):
+        svc = _FakeService({"acc-nordnet": _ACCOUNT_NORDNET})
+        set_tracking_account(svc, _CFG_NORDNET, 44_000.00, today=_TODAY)
+        _, _, adj, _, _ = svc.adjustment_calls[0]
+        self.assertEqual(adj, -500_000)
+
+    def test_uses_budget_id_from_config(self):
+        svc = _FakeService({"acc-nordnet": _ACCOUNT_NORDNET})
+        set_tracking_account(svc, _CFG_NORDNET, 45_000.00, today=_TODAY)
+        budget_id, _, _, _, _ = svc.adjustment_calls[0]
+        self.assertEqual(budget_id, "budget-1")
+
+    def test_negative_balance(self):
+        svc = _FakeService({"acc-mortgage": _ACCOUNT_MORTGAGE})
+        set_tracking_account(svc, _CFG_MORTGAGE, -184_000.00, today=_TODAY)
+        _, _, adj, new_bal, _ = svc.adjustment_calls[0]
+        # -184000 - (-185500) = 1500 → 1500000 mu
+        self.assertEqual(adj, 1_500_000)
+        self.assertEqual(new_bal, -184_000_000)
