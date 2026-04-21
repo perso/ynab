@@ -43,9 +43,10 @@ All configuration and data files live under `~/.config/ynab/`:
    poetry run ynab upload
    ```
 
-   Pass a directory path to use a different input location (e.g. `~/Downloads`):
+   Pass a path to use a different input location — either a directory or a single file:
    ```bash
    poetry run ynab upload ~/Downloads
+   poetry run ynab upload ~/Downloads/FI1234567890_export.csv
    ```
 
    Converted CSVs are written to `~/.config/ynab/output/`. Override with `--output-dir` if needed.
@@ -62,13 +63,15 @@ commands:
   upload [PATH]         convert bank CSVs and upload transactions to YNAB
 
 ynab upload options:
-  PATH               directory containing bank export CSVs
+  PATH               CSV file or directory of CSV files to import
                      (default: ~/.config/ynab/input)
   --output-dir PATH  directory for YNAB import CSVs
                      (default: ~/.config/ynab/output)
   --no-dedup         skip duplicate filtering (deduplication is on by default)
   --approve          mark uploaded transactions as approved (skips manual approval step)
   --no-reconcile     skip balance reconciliation check (reconciliation is on by default)
+  --clean            delete input files after successful upload
+                     (only files with a matching account config entry are deleted)
 ```
 
 ## Direct upload
