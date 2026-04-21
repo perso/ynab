@@ -5,37 +5,23 @@ YNAB API integrations in the middle, big architectural changes last.
 
 ---
 
-## 1. Credentials via environment variable
-
-Support `YNAB_ACCESS_TOKEN` as an alternative to `~/.config/ynab/credentials`.
-
-**Why first:** One-line change, zero new dependencies. Immediately enables running
-the tool from cron jobs, Docker containers, and CI pipelines without writing a
-credentials file to disk. Also pairs naturally with the `tracking update` command
-added recently.
-
-**Behaviour:** If the env var is set, use it. If not, fall back to the credentials
-file as today. Error only if neither is present.
-
----
-
-## 2. Non-interactive one-shot for tracking
+## 1. Non-interactive one-shot for tracking
 
 ```
 ynab tracking set nordnet 45230.50
 ynab tracking set mortgage -- -185000.00
 ```
 
-**Why second:** Tiny effort — it is the same code path as `tracking update` but
+**Why first:** Tiny effort — it is the same code path as `tracking update` but
 skips the prompt loop. Makes tracking updates scriptable and cron-friendly,
-especially once credentials come from an env var (idea #1).
+especially once credentials come from `YNAB_ACCESS_TOKEN`.
 
 **Behaviour:** Look up the account by slug, fetch its current YNAB balance, post
 the adjustment. Exit non-zero if the slug is not in config.
 
 ---
 
-## 3. Summary report
+## 2. Summary report
 
 Print a concise per-account table at the end of `ynab upload`:
 
@@ -52,7 +38,7 @@ parsing log lines.
 
 ---
 
-## 4. Budget dashboard
+## 3. Budget dashboard
 
 A new `ynab status` command that calls `GET /budgets/{id}/months/current` and
 renders a spending summary for the current month:
@@ -76,7 +62,7 @@ filter to a configurable list of categories to avoid a wall of text.
 
 ---
 
-## 5. Goal progress after tracking update
+## 4. Goal progress after tracking update
 
 After `ynab tracking update` posts balance adjustments, fetch
 `GET /budgets/{id}/months/current` and read `goal_percentage_complete` for any
@@ -89,8 +75,8 @@ Emergency fund:    73% ████████░░
 Holiday savings:   41% ████░░░░░░
 ```
 
-**Why fifth:** Zero extra complexity — the API call can be shared with the
-dashboard (idea #4). Seeing goal progress right after updating investments or
+**Why fourth:** Zero extra complexity — the API call can be shared with the
+dashboard (idea #3). Seeing goal progress right after updating investments or
 paying down a mortgage is exactly the motivational feedback that makes manual
 tracking worthwhile.
 
@@ -99,26 +85,26 @@ separate `[goals]` section in `accounts.toml`.
 
 ---
 
-## 6. Auto-categorize on upload
+## 5. Auto-categorize on upload
 
 `GET /budgets/{id}/payees` returns all known payees, each with a
 `last_used_category_id`. Before POSTing bank transactions, look up each payee
 name against the YNAB payee list and, when a match is found, include
 `category_id` in the transaction payload.
 
-**Why sixth:** Transactions land in the right category immediately and bypass
+**Why fifth:** Transactions land in the right category immediately and bypass
 the YNAB inbox entirely, which is the biggest remaining source of manual work
 after upload. YNAB's own UI does this same lookup automatically — this brings
 it to the CLI.
 
 **Caveat:** Matching bank payee strings (often raw uppercase with codes) to YNAB
 payee names requires either exact match after normalisation or fuzzy matching.
-Combining with payee harmonization (idea #7) first would improve hit rate
+Combining with payee harmonization (idea #6) first would improve hit rate
 significantly.
 
 ---
 
-## 7. Payee harmonization
+## 6. Payee harmonization
 
 Map raw bank payee strings to clean names before writing CSVs or uploading.
 
@@ -129,10 +115,10 @@ Map raw bank payee strings to clean names before writing CSVs or uploading.
 "IF VAKUUTUS.*"          = "If Vakuutus"
 ```
 
-**Why seventh:** Raw Finnish bank payees are often uppercase noise with terminal
+**Why sixth:** Raw Finnish bank payees are often uppercase noise with terminal
 codes appended. Cleaning them up makes YNAB's own auto-categorisation much more
 effective and the transaction list more readable. Also a prerequisite for
-reliable auto-categorization (idea #6).
+reliable auto-categorization (idea #5).
 
 **Design questions to settle before implementing:**
 - Regex match or prefix/contains? (Regex is more flexible but heavier to configure.)
@@ -142,12 +128,12 @@ reliable auto-categorization (idea #6).
 
 ---
 
-## 8. Nordnet API integration
+## 7. Nordnet API integration
 
 Auto-fetch the current portfolio value from Nordnet and pre-fill the answer in
 `tracking update` (or set it automatically in `tracking set`).
 
-**Why eighth:** Would remove the most tedious manual step for users with a Nordnet
+**Why seventh:** Would remove the most tedious manual step for users with a Nordnet
 account. Nordnet exposes a public API, but it requires OAuth / session token
 setup, which adds non-trivial configuration and a new dependency. Worth doing
 once the simpler items above are stable.
@@ -157,7 +143,7 @@ to Nordnet is out of scope.
 
 ---
 
-## 9. Multiple bank format support
+## 8. Multiple bank format support
 
 Allow `accounts.toml` to declare the CSV format per account:
 

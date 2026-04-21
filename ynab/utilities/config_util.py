@@ -1,5 +1,6 @@
 """Credential and configuration loading utilities."""
 
+import os
 from pathlib import Path
 from typing import Dict, NamedTuple, Optional, Union
 
@@ -12,24 +13,25 @@ _DEFAULT_CREDENTIALS = Path.home() / ".config" / "ynab" / "credentials"
 
 
 def read_credentials_file(file_path: str = str(_DEFAULT_CREDENTIALS)) -> str:
-    """Read the YNAB API token from a credentials file.
+    """Return the YNAB API token.
 
-    Args:
-        file_path: Path to the credentials file. Defaults to
-            ``~/.config/ynab/credentials``.
-
-    Returns:
-        File contents as a string.
+    Checks ``YNAB_ACCESS_TOKEN`` env var first; falls back to reading
+    *file_path* (default ``~/.config/ynab/credentials``).
 
     Raises:
-        FileNotFoundError: If the credentials file does not exist.
+        ValueError: If neither the env var nor the credentials file is present.
     """
+    token = os.environ.get("YNAB_ACCESS_TOKEN", "").strip()
+    if token:
+        return token
+
     path = Path(file_path)
     try:
         return path.read_text().strip()
     except FileNotFoundError:
-        raise FileNotFoundError(
-            f"Required credentials file not found at {path}"
+        raise ValueError(
+            "YNAB credentials not found. Set the YNAB_ACCESS_TOKEN environment "
+            f"variable or create the credentials file at {path}."
         )
 
 

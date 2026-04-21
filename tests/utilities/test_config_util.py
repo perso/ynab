@@ -14,6 +14,12 @@ from ynab.utilities.config_util import (
 
 
 class TestConfigUtil(unittest.TestCase):
+    def setUp(self):
+        os.environ.pop("YNAB_ACCESS_TOKEN", None)
+
+    def tearDown(self):
+        os.environ.pop("YNAB_ACCESS_TOKEN", None)
+
     def test_read_credentials_file_when_exists(self):
         contents = "secret"
 
@@ -24,17 +30,9 @@ class TestConfigUtil(unittest.TestCase):
         result = read_credentials_file(temp_file_path)
         self.assertEqual(result, contents)
 
-    def test_read_credentials_file_when_not_exists(self):
-        contents = "secret"
-
-        with NamedTemporaryFile(mode="w", delete=False) as temp_file:
-            temp_file.write(contents)
-            temp_file_path = temp_file.name
-
-        with self.assertRaises(FileNotFoundError):
+    def test_read_credentials_file_when_not_exists_raises(self):
+        with self.assertRaises(ValueError):
             read_credentials_file("path/does/not/exist")
-
-        os.remove(temp_file_path)
 
     def test_read_credentials_file_strips_whitespace(self):
         with NamedTemporaryFile(mode="w", delete=False) as temp_file:
@@ -45,6 +43,31 @@ class TestConfigUtil(unittest.TestCase):
         self.assertEqual(result, "my-token")
 
         os.remove(temp_file_path)
+
+    def test_env_var_takes_priority_over_file(self):
+        os.environ["YNAB_ACCESS_TOKEN"] = "env-token"
+        with NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_file.write("file-token")
+            temp_file_path = temp_file.name
+
+        result = read_credentials_file(temp_file_path)
+        self.assertEqual(result, "env-token")
+        os.remove(temp_file_path)
+
+    def test_env_var_used_when_no_credentials_file(self):
+        os.environ["YNAB_ACCESS_TOKEN"] = "env-token"
+        result = read_credentials_file("path/does/not/exist")
+        self.assertEqual(result, "env-token")
+
+    def test_env_var_strips_whitespace(self):
+        os.environ["YNAB_ACCESS_TOKEN"] = "  env-token\n"
+        result = read_credentials_file("path/does/not/exist")
+        self.assertEqual(result, "env-token")
+
+    def test_neither_env_var_nor_file_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            read_credentials_file("path/does/not/exist")
+        self.assertIn("YNAB_ACCESS_TOKEN", str(ctx.exception))
 
 
 def _write_toml(content: str) -> Path:
