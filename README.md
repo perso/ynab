@@ -61,6 +61,7 @@ usage: ynab <command> [options]
 commands:
   init                      create ~/.config/ynab/ with directories and a starter accounts.toml
   upload [PATH]             convert bank CSVs and upload transactions to YNAB
+  status                    show current month spending summary for all configured budgets
   tracking update           interactively update all tracking account balances
   tracking set SLUG AMOUNT  set one tracking account to a specific balance
 
@@ -172,6 +173,27 @@ name       = "Home Loan"
 budget_id  = "<budget-uuid>"
 account_id = "<account-uuid>"
 ```
+
+## Budget dashboard
+
+`ynab status` fetches the current month's category data from the YNAB API and
+prints a per-category spending summary:
+
+```
+2026-04-01
+Category                 Budgeted       Spent    Remaining
+──────────────────────────────────────────────────────────
+Groceries                  400.00     -312.40        87.60
+Dining out                 150.00     -187.20     ⚠ -37.20
+Transport                  100.00      -44.00        56.00
+```
+
+Overspent categories (negative balance) are flagged with ⚠.  Hidden, deleted,
+and completely inactive categories are omitted.
+
+The command reads budget IDs from all entries in `accounts.toml` (regular and
+tracking accounts) and renders a table for each distinct budget found.
+Credentials must be configured (see **Authentication** below).
 
 ## Authentication
 

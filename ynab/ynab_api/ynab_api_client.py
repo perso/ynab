@@ -39,6 +39,25 @@ class YnabApiError(Exception):
     """Raised when the YNAB API returns an unexpected response."""
 
 
+class CategorySummary(NamedTuple):
+    """Category budget and spending summary for a single month."""
+
+    name: str
+    category_group_name: str
+    budgeted: int  # milliunits
+    activity: int  # milliunits; negative = outflow
+    balance: int   # milliunits
+    hidden: bool
+    deleted: bool
+
+
+class BudgetMonth(NamedTuple):
+    """Summary of a single budget month returned by the YNAB API."""
+
+    month: str  # "YYYY-MM-DD" — first day of the month
+    categories: List[CategorySummary]
+
+
 def get_transactions(
     token: str,
     budget_id: str,
@@ -176,3 +195,53 @@ def get_account(
         raise YnabApiError(f"Unexpected YNAB API response format: {exc}") from exc
 
     return result
+
+
+def get_budget_month(
+    token: str,
+    budget_id: str,
+    month: str = "current",
+) -> BudgetMonth:
+    """Fetch a monthly budget summary from the YNAB API.
+
+    Args:
+        token: YNAB personal access token.
+        budget_id: YNAB budget UUID.
+        month: Month identifier; ``"current"`` or ``"YYYY-MM-DD"``.
+
+    Returns:
+        ``BudgetMonth`` with the month identifier and per-category summaries.
+
+    Raises:
+        YnabApiError: On HTTP 429 (rate limit) or malformed response body.
+        requests.HTTPError: On other non-2xx HTTP errors.
+    """
+    url = f"{BASE_URL}/plans/{budget_id}/months/{month}"
+    response = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+
+    if response.status_code == 429:
+        retry_after = response.headers.get("Retry-After", "unknown")
+        raise YnabApiError(
+            f"YNAB API rate limit reached. Retry after {retry_after} seconds."
+        )
+
+    response.raise_for_status()
+
+    try:
+        month_data = response.json()["data"]["month"]
+        categories = [
+            CategorySummary(
+                name=c["name"],
+                category_group_name=c["category_group_name"],
+                budgeted=c["budgeted"],
+                activity=c["activity"],
+                balance=c["balance"],
+                hidden=c["hidden"],
+                deleted=c["deleted"],
+            )
+            for c in month_data["categories"]
+        ]
+    except (KeyError, ValueError) as exc:
+        raise YnabApiError(f"Unexpected YNAB API response format: {exc}") from exc
+
+    return BudgetMonth(month=month_data["month"], categories=categories)

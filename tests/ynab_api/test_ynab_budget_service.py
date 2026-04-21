@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from ynab.bank.transaction import BankTransaction, TransactionStatus
 from ynab.budget_service import BudgetService
-from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount
+from ynab.ynab_api.ynab_api_client import BudgetMonth, TransactionsResponse, YnabAccount
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
 
 _CLEARED = TransactionStatus.CLEARED
@@ -46,3 +46,19 @@ class TestYnabBudgetServiceProtocol(unittest.TestCase):
         result = service.get_account("b1", "a1")
         mock_get_account.assert_called_once_with("tok", "b1", "a1")
         self.assertEqual(result, expected)
+
+    @patch("ynab.ynab_api.ynab_budget_service.ynab_api_client.get_budget_month")
+    def test_delegates_get_budget_month_to_api_client(self, mock_get_month):
+        expected = BudgetMonth(month="2026-04-01", categories=[])
+        mock_get_month.return_value = expected
+        service = YnabBudgetService("tok")
+        result = service.get_budget_month("b1")
+        mock_get_month.assert_called_once_with("tok", "b1", "current")
+        self.assertEqual(result, expected)
+
+    @patch("ynab.ynab_api.ynab_budget_service.ynab_api_client.get_budget_month")
+    def test_get_budget_month_passes_explicit_month(self, mock_get_month):
+        mock_get_month.return_value = BudgetMonth(month="2026-03-01", categories=[])
+        service = YnabBudgetService("tok")
+        service.get_budget_month("b1", month="2026-03-01")
+        mock_get_month.assert_called_once_with("tok", "b1", "2026-03-01")

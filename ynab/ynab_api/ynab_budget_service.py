@@ -7,7 +7,7 @@ from typing import List, Optional
 from ynab.bank.transaction import BankTransaction
 from ynab.ynab_api import ynab_api_client
 from ynab.ynab_api.transaction_uploader import to_adjustment_payload, to_api_payloads
-from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount
+from ynab.ynab_api.ynab_api_client import BudgetMonth, TransactionsResponse, YnabAccount
 
 
 class YnabBudgetService:
@@ -90,3 +90,12 @@ class YnabBudgetService:
         :returns: ``YnabAccount`` with id, name, and cleared_balance (milliunits).
         """
         return ynab_api_client.get_account(self._token, budget_id, account_id)
+
+    def get_budget_month(self, budget_id: str, month: str = "current") -> BudgetMonth:
+        """Fetch a monthly budget summary from the YNAB API.
+
+        :param budget_id: YNAB budget UUID.
+        :param month: Month identifier; ``"current"`` or ``"YYYY-MM-DD"``.
+        :returns: ``BudgetMonth`` with the month identifier and per-category summaries.
+        """
+        return ynab_api_client.get_budget_month(self._token, budget_id, month)

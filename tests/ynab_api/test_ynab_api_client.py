@@ -6,12 +6,15 @@ import requests
 
 from ynab.ynab_api.ynab_api_client import (
     BASE_URL,
+    BudgetMonth,
+    CategorySummary,
     TransactionsResponse,
     YnabAccount,
     YnabApiError,
     YnabTransaction,
     create_transactions,
     get_account,
+    get_budget_month,
     get_transactions,
 )
 
@@ -241,3 +244,98 @@ class TestGetAccount(unittest.TestCase):
 
         with self.assertRaises(YnabApiError):
             get_account("token", "budget-id", "a1")
+
+
+_SAMPLE_CATEGORY_RAW = {
+    "name": "Groceries",
+    "category_group_name": "Everyday Expenses",
+    "budgeted": 400000,
+    "activity": -312400,
+    "balance": 87600,
+    "hidden": False,
+    "deleted": False,
+}
+
+_SAMPLE_CATEGORY = CategorySummary(
+    name="Groceries",
+    category_group_name="Everyday Expenses",
+    budgeted=400000,
+    activity=-312400,
+    balance=87600,
+    hidden=False,
+    deleted=False,
+)
+
+
+def _mock_month_response(month_str: str, categories: list, status_code: int = 200) -> MagicMock:
+    mock = MagicMock()
+    mock.status_code = status_code
+    mock.json.return_value = {"data": {"month": {"month": month_str, "categories": categories}}}
+    mock.raise_for_status.return_value = None
+    return mock
+
+
+class TestGetBudgetMonth(unittest.TestCase):
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_returns_budget_month(self, mock_get):
+        mock_get.return_value = _mock_month_response("2026-04-01", [_SAMPLE_CATEGORY_RAW])
+
+        result = get_budget_month("token", "budget-id")
+
+        self.assertEqual(result, BudgetMonth(month="2026-04-01", categories=[_SAMPLE_CATEGORY]))
+        mock_get.assert_called_once_with(
+            "https://api.ynab.com/v1/plans/budget-id/months/current",
+            headers={"Authorization": "Bearer token"},
+        )
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_accepts_explicit_month(self, mock_get):
+        mock_get.return_value = _mock_month_response("2026-03-01", [])
+
+        get_budget_month("token", "budget-id", month="2026-03-01")
+
+        mock_get.assert_called_once_with(
+            "https://api.ynab.com/v1/plans/budget-id/months/2026-03-01",
+            headers={"Authorization": "Bearer token"},
+        )
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_returns_empty_categories(self, mock_get):
+        mock_get.return_value = _mock_month_response("2026-04-01", [])
+
+        result = get_budget_month("token", "budget-id")
+
+        self.assertEqual(result.categories, [])
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_raises_on_http_error(self, mock_get):
+        mock = MagicMock()
+        mock.status_code = 404
+        mock.raise_for_status.side_effect = requests.HTTPError("404")
+        mock_get.return_value = mock
+
+        with self.assertRaises(requests.HTTPError):
+            get_budget_month("token", "budget-id")
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_raises_ynab_api_error_on_429(self, mock_get):
+        mock = MagicMock()
+        mock.status_code = 429
+        mock.headers = {"Retry-After": "45"}
+        mock_get.return_value = mock
+
+        with self.assertRaises(YnabApiError) as ctx:
+            get_budget_month("token", "budget-id")
+
+        self.assertIn("45", str(ctx.exception))
+
+    @patch("ynab.ynab_api.ynab_api_client.requests.get")
+    def test_raises_ynab_api_error_on_malformed_body(self, mock_get):
+        mock = MagicMock()
+        mock.status_code = 200
+        mock.raise_for_status.return_value = None
+        mock.json.return_value = {"unexpected": "shape"}
+        mock_get.return_value = mock
+
+        with self.assertRaises(YnabApiError):
+            get_budget_month("token", "budget-id")

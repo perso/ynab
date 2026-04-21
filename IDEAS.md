@@ -5,31 +5,7 @@ YNAB API integrations in the middle, big architectural changes last.
 
 ---
 
-## 1. Budget dashboard
-
-A new `ynab status` command that calls `GET /budgets/{id}/months/current` and
-renders a spending summary for the current month:
-
-```
-Category                 Budgeted    Spent    Remaining
-────────────────────────────────────────────────────────
-Groceries                  400.00   -312.40       87.60
-Dining out                 150.00   -187.20      ⚠ -37.20
-Transport                  100.00    -44.00       56.00
-```
-
-**Why first:** One read-only API call surfaces the information most useful for
-day-to-day budget decisions. Overspent categories are flagged immediately without
-opening the YNAB web app.
-
-**Scope:** Read-only. Budget ID(s) read from `accounts.toml` as usual. Could
-filter to a configurable list of categories to avoid a wall of text.
-
-**Danger:** The payee name is not guaranteed to match between bank and YNAB.
-
----
-
-## 2. Goal progress after tracking update
+## 1. Goal progress after tracking update
 
 After `ynab tracking update` posts balance adjustments, fetch
 `GET /budgets/{id}/months/current` and read `goal_percentage_complete` for any
@@ -43,7 +19,7 @@ Holiday savings:   41% ████░░░░░░
 ```
 
 **Why second:** Zero extra complexity — the API call can be shared with the
-dashboard (idea #1). Seeing goal progress right after updating investments or
+`ynab status` dashboard. Seeing goal progress right after updating investments or
 paying down a mortgage is exactly the motivational feedback that makes manual
 tracking worthwhile.
 
