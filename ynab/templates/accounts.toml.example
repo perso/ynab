@@ -9,6 +9,11 @@
 # date_tolerance_days controls how many days of slack is allowed when matching
 # bank transactions against YNAB. Defaults to 3. Credit cards often need a
 # higher value (e.g. 7) because the posted date can lag the purchase date.
+#
+# memo_template is an optional Python format string written to the YNAB memo
+# field for each transaction. Supported placeholders: {category} and
+# {sub_category} (the bank's own Finnish labels). When omitted, the memo is
+# left blank. Example: "{category} / {sub_category}"
 
 [accounts.FI0000000000000001]
 budget_name         = "Checking"
@@ -18,3 +23,4 @@ account_id          = "ynab-account-uuid"
 budget_name         = "Visa"
 account_id          = "ynab-account-uuid"
 date_tolerance_days = 7
+# memo_template       = "{category} / {sub_category}"

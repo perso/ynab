@@ -1,7 +1,7 @@
 """YNAB implementation of the BudgetService protocol."""
 
 from datetime import date
-from typing import List
+from typing import List, Optional
 
 from ynab.bank.transaction import BankTransaction
 from ynab.ynab_api import ynab_api_client
@@ -43,6 +43,7 @@ class YnabBudgetService:
         account_id: str,
         transactions: List[BankTransaction],
         approved: bool = False,
+        memo_template: Optional[str] = None,
     ) -> int:
         """Upload bank transactions to a YNAB account.
 
@@ -54,10 +55,11 @@ class YnabBudgetService:
         :param account_id: YNAB account UUID to associate each transaction with.
         :param transactions: Bank transactions to upload.
         :param approved: Whether to mark each transaction as approved in YNAB.
+        :param memo_template: Optional template string for the memo field.
         :returns: Number of transactions accepted by the YNAB API.
         """
 
-        payloads = to_api_payloads(transactions, account_id, approved=approved)
+        payloads = to_api_payloads(transactions, account_id, approved=approved, memo_template=memo_template)
         return ynab_api_client.create_transactions(self._token, budget_id, payloads)
 
     def get_account(self, budget_id: str, account_id: str) -> YnabAccount:

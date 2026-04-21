@@ -90,7 +90,7 @@ def convert_bank_transactions(
             )
 
         transactions = sorted(set(transactions))
-        write_transactions(mapping.output_path, transactions)
+        write_transactions(mapping.output_path, transactions, memo_template=cfg.memo_template)
 
         if upload_enabled and transactions:
             if not effective_budget_id or not cfg.account_id:
@@ -100,7 +100,8 @@ def convert_bank_transactions(
                 )
             else:
                 budget_service.create_transactions(  # type: ignore[union-attr]
-                    effective_budget_id, cfg.account_id, transactions, approved=approve_enabled
+                    effective_budget_id, cfg.account_id, transactions,
+                    approved=approve_enabled, memo_template=cfg.memo_template,
                 )
 
         if reconcile_enabled:

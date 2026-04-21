@@ -40,6 +40,7 @@ class AccountConfig(NamedTuple):
     budget_id: Optional[str]
     account_id: Optional[str]
     date_tolerance_days: Optional[int] = None
+    memo_template: Optional[str] = None
 
 
 def read_accounts_config(path: Union[str, Path]) -> Dict[str, AccountConfig]:
@@ -87,5 +88,6 @@ def read_accounts_config(path: Union[str, Path]) -> Dict[str, AccountConfig]:
             budget_id=cfg.get("budget_id"),
             account_id=cfg.get("account_id"),
             date_tolerance_days=cfg.get("date_tolerance_days"),
+            memo_template=cfg.get("memo_template"),
         )
     return result

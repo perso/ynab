@@ -1,7 +1,7 @@
 """Protocol for budget service integrations."""
 
 from datetime import date
-from typing import List, Protocol, runtime_checkable
+from typing import List, Optional, Protocol, runtime_checkable
 
 from ynab.bank.transaction import BankTransaction
 from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount
@@ -28,6 +28,7 @@ class BudgetService(Protocol):
         account_id: str,
         transactions: List[BankTransaction],
         approved: bool = False,
+        memo_template: Optional[str] = None,
     ) -> int: ...
 
     def get_account(self, budget_id: str, account_id: str) -> YnabAccount: ...

@@ -93,6 +93,20 @@ class TestToApiPayload(unittest.TestCase):
         self.assertEqual(to_api_payload(_TXN_NO_BALANCE, "acc-123")["import_id"], expected)
 
 
+class TestToApiPayloadMemo(unittest.TestCase):
+    def test_memo_absent_by_default(self):
+        payload = to_api_payload(_TXN, "acc-123")
+        self.assertNotIn("memo", payload)
+
+    def test_memo_included_when_provided(self):
+        payload = to_api_payload(_TXN, "acc-123", memo="Food / Cafe")
+        self.assertEqual(payload["memo"], "Food / Cafe")
+
+    def test_memo_absent_when_empty_string(self):
+        payload = to_api_payload(_TXN, "acc-123", memo="")
+        self.assertNotIn("memo", payload)
+
+
 class TestToApiPayloads(unittest.TestCase):
     def test_returns_one_payload_per_transaction(self):
         txns = [_TXN, _TXN._replace(payee="Other")]
@@ -103,3 +117,13 @@ class TestToApiPayloads(unittest.TestCase):
 
     def test_empty_list_returns_empty(self):
         self.assertEqual(to_api_payloads([], "acc-123"), [])
+
+    def test_memo_template_applied_to_all(self):
+        txns = [_TXN, _TXN._replace(category="Other", sub_category="Sub2")]
+        result = to_api_payloads(txns, "acc-123", memo_template="{category} / {sub_category}")
+        self.assertEqual(result[0]["memo"], "Cat / Sub")
+        self.assertEqual(result[1]["memo"], "Other / Sub2")
+
+    def test_no_memo_when_template_absent(self):
+        result = to_api_payloads([_TXN], "acc-123")
+        self.assertNotIn("memo", result[0])

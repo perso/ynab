@@ -4,7 +4,41 @@ import unittest
 from datetime import date
 
 from ynab.bank.transaction import BankTransaction, TransactionStatus
-from ynab.bank.transaction_writer import write_transactions
+from ynab.bank.transaction_writer import format_memo, write_transactions
+
+_BARBER = BankTransaction(
+    date(2023, 4, 20), 'Vaatteet, terveys ja hyvinvointi', 'Kampaamo- ja parturipalvelut',
+    'Zettle_*TMI BARBER', -55.0, 8588.83, TransactionStatus.CLEARED,
+)
+_GROCERY = BankTransaction(
+    date(2023, 4, 20), 'Ruoka- ja päivittäisostokset', 'Ruokakaupat ja marketit',
+    'K-Citymarket Kerava', -13.85, 8643.83, TransactionStatus.CLEARED,
+)
+
+
+class TestFormatMemo(unittest.TestCase):
+    def test_returns_empty_when_no_template(self):
+        self.assertEqual(format_memo(_BARBER, None), "")
+
+    def test_returns_empty_when_empty_template(self):
+        self.assertEqual(format_memo(_BARBER, ""), "")
+
+    def test_category_placeholder(self):
+        result = format_memo(_BARBER, "{category}")
+        self.assertEqual(result, "Vaatteet, terveys ja hyvinvointi")
+
+    def test_sub_category_placeholder(self):
+        result = format_memo(_BARBER, "{sub_category}")
+        self.assertEqual(result, "Kampaamo- ja parturipalvelut")
+
+    def test_combined_template(self):
+        result = format_memo(_BARBER, "{category} / {sub_category}")
+        self.assertEqual(result, "Vaatteet, terveys ja hyvinvointi / Kampaamo- ja parturipalvelut")
+
+    def test_empty_category_fields(self):
+        txn = _BARBER._replace(category="", sub_category="")
+        result = format_memo(txn, "{category} / {sub_category}")
+        self.assertEqual(result, " / ")
 
 
 class TestTransactionWriter(unittest.TestCase):
@@ -17,10 +51,8 @@ class TestTransactionWriter(unittest.TestCase):
             '2023-03-20,If Vakuutus,,-9.94\n',
         ]
         self.transactions = [
-            BankTransaction(date(2023, 4, 20), 'Vaatteet, terveys ja hyvinvointi', 'Kampaamo- ja parturipalvelut',
-                            'Zettle_*TMI BARBER', -55.0, 8588.83, TransactionStatus.CLEARED),
-            BankTransaction(date(2023, 4, 20), 'Ruoka- ja päivittäisostokset', 'Ruokakaupat ja marketit',
-                            'K-Citymarket Kerava', -13.85, 8643.83, TransactionStatus.CLEARED),
+            _BARBER,
+            _GROCERY,
             BankTransaction(date(2023, 4, 19), '', '', 'Varaus', -7.7, None, TransactionStatus.PENDING),
             BankTransaction(date(2023, 3, 20), 'Henkilövakuutukset', 'Muut menot', 'If Vakuutus', -9.94, 11956.07,
                             TransactionStatus.RECONCILED)
@@ -36,6 +68,20 @@ class TestTransactionWriter(unittest.TestCase):
             lines = f.readlines()
             self.assertEqual(self.expected_csv_lines, lines)
 
+        os.remove(filename)
+
+    def test_write_transactions_with_memo_template(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            filename = f.name
+
+        write_transactions(filename, [_BARBER, _GROCERY], memo_template="{category} / {sub_category}")
+
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+
+        self.assertEqual(lines[0], 'Date,Payee,Memo,Amount\n')
+        self.assertIn('Vaatteet, terveys ja hyvinvointi / Kampaamo- ja parturipalvelut', lines[1])
+        self.assertIn('Ruoka- ja päivittäisostokset / Ruokakaupat ja marketit', lines[2])
         os.remove(filename)
 
     def test_second_write_overwrites_first(self):

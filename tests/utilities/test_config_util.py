@@ -132,4 +132,22 @@ budget_name = "MyAccount"
 """)
         result = read_accounts_config(path)
         self.assertIsNone(result["FI123"].date_tolerance_days)
+
+    def test_memo_template_parsed(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name   = "MyAccount"
+memo_template = "{category} / {sub_category}"
+""")
+        result = read_accounts_config(path)
+        self.assertEqual(result["FI123"].memo_template, "{category} / {sub_category}")
+        os.remove(path)
+
+    def test_memo_template_absent_is_none(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "MyAccount"
+""")
+        result = read_accounts_config(path)
+        self.assertIsNone(result["FI123"].memo_template)
         os.remove(path)
