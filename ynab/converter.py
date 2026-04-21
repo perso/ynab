@@ -75,8 +75,7 @@ def convert_bank_transactions(
             if not effective_budget_id or not cfg.account_id:
                 raise ValueError(
                     f"--dedup requires complete config for account '{mapping.account_no}': "
-                    f"set 'account_id' in accounts.toml and either 'budget_id' in accounts.toml "
-                    f"or pass --budget-id."
+                    f"set 'account_id' and 'budget_id' in accounts.toml."
                 )
             tolerance = cfg.date_tolerance_days if cfg.date_tolerance_days is not None else DEFAULT_DATE_TOLERANCE_DAYS
             since = derive_since_date(transactions, tolerance)

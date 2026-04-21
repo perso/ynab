@@ -25,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="convert bank CSVs and upload transactions to YNAB",
     )
     upload.add_argument(
-        "--input-dir", default=str(_CONFIG_DIR / "input"), metavar="PATH",
+        "input_dir", nargs="?", default=str(_CONFIG_DIR / "input"), metavar="PATH",
         help=f"directory containing bank export CSVs (default: {_CONFIG_DIR / 'input'})",
     )
     upload.add_argument(
@@ -33,20 +33,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"directory for YNAB import CSVs (default: {_CONFIG_DIR / 'output'})",
     )
     upload.add_argument(
-        "--dedup", action="store_true",
-        help="fetch existing YNAB transactions and filter duplicates before uploading",
-    )
-    upload.add_argument(
-        "--budget-id", metavar="UUID",
-        help="global YNAB budget ID; per-account value in accounts.toml takes precedence",
+        "--no-dedup", dest="dedup", action="store_false", default=True,
+        help="skip fetching existing YNAB transactions (duplicate filtering is on by default)",
     )
     upload.add_argument(
         "--approve", action="store_true",
         help="mark uploaded transactions as approved in YNAB (skips manual approval step)",
     )
     upload.add_argument(
-        "--reconcile", action="store_true",
-        help="compare bank balance from CSV against YNAB cleared balance and report the diff",
+        "--no-reconcile", dest="reconcile", action="store_false", default=True,
+        help="skip balance reconciliation check (reconciliation is on by default)",
     )
     return parser
 
@@ -90,7 +86,6 @@ def run_app() -> None:
             upload_enabled=True,
             approve_enabled=args.approve,
             reconcile_enabled=args.reconcile,
-            global_budget_id=args.budget_id,
         )
     else:
         parser.print_help()

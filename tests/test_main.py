@@ -321,7 +321,7 @@ class TestConvertBankTransactionsWithDedup(unittest.TestCase):
             )
 
         self.assertIn("FI111", str(ctx.exception))
-        self.assertIn("--dedup", str(ctx.exception))
+        self.assertIn("accounts.toml", str(ctx.exception))
 
     def test_uses_global_budget_id_when_account_budget_id_absent(self):
         """budget_id absent from accounts.toml falls back to global_budget_id."""
@@ -735,34 +735,44 @@ class TestRunApp(unittest.TestCase):
         mock_convert.assert_called_once_with(
             input_dir=str(_CONFIG_DIR / "input"),
             output_dir=str(_CONFIG_DIR / "output"),
-            dedup_enabled=False,
+            dedup_enabled=True,
             upload_enabled=True,
             approve_enabled=False,
-            reconcile_enabled=False,
-            global_budget_id=None,
+            reconcile_enabled=True,
+        )
+
+    @patch("ynab.cli.convert_bank_transactions")
+    def test_run_app_upload_passes_positional_input_dir(self, mock_convert):
+        from ynab.cli import run_app
+        with patch.object(sys, "argv", ["ynab", "upload", "/tmp/in"]):
+            run_app()
+        mock_convert.assert_called_once_with(
+            input_dir="/tmp/in",
+            output_dir=mock_convert.call_args.kwargs["output_dir"],
+            dedup_enabled=True,
+            upload_enabled=True,
+            approve_enabled=False,
+            reconcile_enabled=True,
         )
 
     @patch("ynab.cli.convert_bank_transactions")
     def test_run_app_upload_passes_flags(self, mock_convert):
         from ynab.cli import run_app
         with patch.object(sys, "argv", [
-            "ynab", "upload",
-            "--input-dir", "/tmp/in",
+            "ynab", "upload", "/tmp/in",
             "--output-dir", "/tmp/out",
-            "--dedup",
+            "--no-dedup",
             "--approve",
-            "--reconcile",
-            "--budget-id", "b-uuid",
+            "--no-reconcile",
         ]):
             run_app()
         mock_convert.assert_called_once_with(
             input_dir="/tmp/in",
             output_dir="/tmp/out",
-            dedup_enabled=True,
+            dedup_enabled=False,
             upload_enabled=True,
             approve_enabled=True,
-            reconcile_enabled=True,
-            global_budget_id="b-uuid",
+            reconcile_enabled=False,
         )
 
     def test_run_app_no_subcommand_prints_help(self):
