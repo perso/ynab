@@ -1,11 +1,12 @@
 """YNAB implementation of the BudgetService protocol."""
 
+import datetime
 from datetime import date
 from typing import List, Optional
 
 from ynab.bank.transaction import BankTransaction
 from ynab.ynab_api import ynab_api_client
-from ynab.ynab_api.transaction_uploader import to_api_payloads
+from ynab.ynab_api.transaction_uploader import to_adjustment_payload, to_api_payloads
 from ynab.ynab_api.ynab_api_client import TransactionsResponse, YnabAccount
 
 
@@ -61,6 +62,25 @@ class YnabBudgetService:
 
         payloads = to_api_payloads(transactions, account_id, approved=approved, memo_template=memo_template)
         return ynab_api_client.create_transactions(self._token, budget_id, payloads)
+
+    def create_adjustment(
+        self,
+        budget_id: str,
+        account_id: str,
+        adjustment_milliunits: int,
+        new_balance_milliunits: int,
+        on_date: datetime.date,
+    ) -> None:
+        """Post a single balance-adjustment transaction to a YNAB tracking account.
+
+        :param budget_id: YNAB budget UUID.
+        :param account_id: YNAB account UUID.
+        :param adjustment_milliunits: Delta to apply (milliunits).
+        :param new_balance_milliunits: Target balance after adjustment (milliunits).
+        :param on_date: Date to record for the transaction.
+        """
+        payload = to_adjustment_payload(account_id, adjustment_milliunits, new_balance_milliunits, on_date)
+        ynab_api_client.create_transactions(self._token, budget_id, [payload])
 
     def get_account(self, budget_id: str, account_id: str) -> YnabAccount:
         """Fetch a single account from the YNAB API.

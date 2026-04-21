@@ -5,6 +5,7 @@ import logging
 from importlib.resources import files
 
 from ynab.converter import _CONFIG_DIR, convert_bank_transactions
+from ynab.tracking_updater import run_tracking_update
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +49,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--clean", action="store_true",
         help="delete input files after successful upload (only files with valid account config are deleted)",
     )
+
+    tracking = subparsers.add_parser(
+        "tracking",
+        help="manage YNAB tracking accounts (investments, mortgage, loans, etc.)",
+    )
+    tracking_sub = tracking.add_subparsers(dest="tracking_command")
+    tracking_sub.add_parser(
+        "update",
+        help=(
+            "interactively update balances of all configured tracking accounts "
+            "and post adjustment transactions to YNAB"
+        ),
+    )
+
     return parser
 
 
@@ -92,5 +107,10 @@ def run_app() -> None:
             reconcile_enabled=args.reconcile,
             clean_enabled=args.clean,
         )
+    elif args.command == "tracking":
+        if getattr(args, "tracking_command", None) == "update":
+            run_tracking_update()
+        else:
+            parser.parse_args(["tracking", "--help"])
     else:
         parser.print_help()

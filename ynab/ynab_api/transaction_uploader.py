@@ -1,5 +1,6 @@
 """Convert BankTransaction objects to YNAB API create-transaction payloads."""
 
+import datetime
 from hashlib import sha256
 from typing import Any, Dict, List, Optional
 
@@ -66,3 +67,36 @@ def to_api_payloads(
         to_api_payload(t, account_id, approved=approved, memo=format_memo(t, memo_template))
         for t in txns
     ]
+
+
+def to_adjustment_payload(
+    account_id: str,
+    adjustment_milliunits: int,
+    new_balance_milliunits: int,
+    on_date: datetime.date,
+) -> Dict[str, Any]:
+    """Build a YNAB API payload for a manual tracking-account balance adjustment.
+
+    The ``import_id`` encodes the target date, account, and new balance so that
+    re-running with the same inputs on the same day is idempotent — YNAB will
+    silently discard the duplicate.
+
+    :param account_id: YNAB account UUID.
+    :param adjustment_milliunits: Delta to apply (new_balance - current_balance), milliunits.
+    :param new_balance_milliunits: Target balance after adjustment, milliunits.
+    :param on_date: Date to record for the transaction.
+    :returns: Dict ready to be POSTed to the YNAB transactions API.
+    """
+    import_id = sha256(
+        f"adj|{on_date.isoformat()}|{account_id}|{new_balance_milliunits}".encode()
+    ).hexdigest()[:36]
+    return {
+        "account_id": account_id,
+        "date": on_date.isoformat(),
+        "amount": adjustment_milliunits,
+        "payee_name": "Manual Balance Update",
+        "memo": "Updated via ynab CLI",
+        "cleared": "reconciled",
+        "approved": True,
+        "import_id": import_id,
+    }

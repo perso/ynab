@@ -1,3 +1,4 @@
+import datetime
 import os
 import sys
 import unittest
@@ -79,6 +80,16 @@ class _FakeBudgetService:
     ) -> int:
         self.create_calls.append((budget_id, account_id, transactions, approved))
         return self.created_count
+
+    def create_adjustment(
+        self,
+        budget_id: str,
+        account_id: str,
+        adjustment_milliunits: int,
+        new_balance_milliunits: int,
+        on_date: datetime.date,
+    ) -> None:
+        pass  # not exercised by bank-import integration tests
 
     def get_account(self, budget_id: str, account_id: str) -> YnabAccount:
         self.account_calls.append((budget_id, account_id))

@@ -24,3 +24,24 @@ budget_name         = "Visa"
 account_id          = "ynab-account-uuid"
 date_tolerance_days = 7
 # memo_template       = "{category} / {sub_category}"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tracking accounts — investments, mortgage, loans, etc.
+# Run `ynab tracking update` to interactively set new balances and post
+# adjustment transactions to YNAB. All three keys are required.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# [tracking_accounts.nordnet]
+# name       = "Nordnet Investments"
+# budget_id  = "ynab-budget-uuid"
+# account_id = "ynab-account-uuid"
+
+# [tracking_accounts.op_funds]
+# name       = "OP Funds"
+# budget_id  = "ynab-budget-uuid"
+# account_id = "ynab-account-uuid"
+
+# [tracking_accounts.mortgage]
+# name       = "Mortgage"
+# budget_id  = "ynab-budget-uuid"
+# account_id = "ynab-account-uuid"

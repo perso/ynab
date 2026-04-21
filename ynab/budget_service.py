@@ -1,5 +1,6 @@
 """Protocol for budget service integrations."""
 
+import datetime
 from datetime import date
 from typing import List, Optional, Protocol, runtime_checkable
 
@@ -30,5 +31,14 @@ class BudgetService(Protocol):
         approved: bool = False,
         memo_template: Optional[str] = None,
     ) -> int: ...
+
+    def create_adjustment(
+        self,
+        budget_id: str,
+        account_id: str,
+        adjustment_milliunits: int,
+        new_balance_milliunits: int,
+        on_date: datetime.date,
+    ) -> None: ...
 
     def get_account(self, budget_id: str, account_id: str) -> YnabAccount: ...
