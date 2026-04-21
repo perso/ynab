@@ -1,7 +1,10 @@
 """Filesystem helpers for mapping bank export files to YNAB import paths."""
 
+import logging
 from pathlib import Path
 from typing import Dict, List, NamedTuple
+
+log = logging.getLogger(__name__)
 
 
 class FilePathMapping(NamedTuple):
@@ -35,11 +38,12 @@ def form_file_paths(
     for csv_file in input_path.glob("*.csv"):
         parts = csv_file.stem.split("_", maxsplit=1)
         if len(parts) != 2:
-            raise ValueError(
-                f"Input filename '{csv_file.name}' does not match the required format "
-                f"'<account_no>_<suffix>.csv'"
-            )
+            log.warning("Skipping '%s': filename does not match '<account_no>_<suffix>.csv'", csv_file.name)
+            continue
         account_no, suffix = parts
+        if account_no not in accountno_budget_map:
+            log.warning("Skipping '%s': account number '%s' not found in accounts.toml", csv_file.name, account_no)
+            continue
         budget_name = accountno_budget_map[account_no]
         output_file = output_path / f"{budget_name}_{suffix}.csv"
         file_paths.append(FilePathMapping(account_no, str(csv_file), str(output_file)))

@@ -41,8 +41,10 @@ class TestFileSystemUtil(unittest.TestCase):
         test_file = f"{temp_dir}/UNKNOWN_2023.csv"
         open(test_file, mode="w")
 
-        with self.assertRaises(KeyError):
-            form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map={})
+        with self.assertLogs("ynab.utilities.fs_util", level="WARNING") as cm:
+            paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map={})
+        self.assertEqual([], paths)
+        self.assertTrue(any("UNKNOWN" in msg for msg in cm.output))
 
         os.remove(test_file)
         os.removedirs(temp_dir)
@@ -91,9 +93,10 @@ class TestFileSystemUtil(unittest.TestCase):
         csv_file = f"{temp_dir}/export.csv"
         open(csv_file, mode="w")
 
-        with self.assertRaises(ValueError) as ctx:
-            form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map={})
-        self.assertIn("export.csv", str(ctx.exception))
+        with self.assertLogs("ynab.utilities.fs_util", level="WARNING") as cm:
+            paths = form_file_paths(input_dir=temp_dir, output_dir=temp_dir, accountno_budget_map={})
+        self.assertEqual([], paths)
+        self.assertTrue(any("export.csv" in msg for msg in cm.output))
 
         os.remove(csv_file)
         os.removedirs(temp_dir)
