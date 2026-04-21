@@ -52,23 +52,7 @@ parsing log lines.
 
 ---
 
-## 4. Deduplication on payee
-
-Use payee name as an additional match criterion when filtering bank transactions
-already in YNAB.
-
-**Why fourth:** This is a real correctness gap. Currently two transactions on the
-same day for the same amount from different payees are treated as duplicates of
-each other. The fix is optional and per-account (e.g. `dedup_match_payee = true`
-in `accounts.toml`) because YNAB sometimes renames payees on import, which would
-cause false negatives if payee matching is always on.
-
-**Note:** The existing sort key already includes payee for determinism, so the
-data is available — it just is not used in the match condition today.
-
----
-
-## 5. Payee harmonization
+## 4. Payee harmonization
 
 Map raw bank payee strings to clean names before writing CSVs or uploading.
 
@@ -79,7 +63,7 @@ Map raw bank payee strings to clean names before writing CSVs or uploading.
 "IF VAKUUTUS.*"          = "If Vakuutus"
 ```
 
-**Why fifth:** Raw Finnish bank payees are often uppercase noise with terminal
+**Why fourth:** Raw Finnish bank payees are often uppercase noise with terminal
 codes appended. Cleaning them up makes YNAB's own auto-categorisation much more
 effective and the transaction list more readable.
 
@@ -91,12 +75,12 @@ effective and the transaction list more readable.
 
 ---
 
-## 6. Nordnet API integration
+## 5. Nordnet API integration
 
 Auto-fetch the current portfolio value from Nordnet and pre-fill the answer in
 `tracking update` (or set it automatically in `tracking set`).
 
-**Why sixth:** Would remove the most tedious manual step for users with a Nordnet
+**Why fifth:** Would remove the most tedious manual step for users with a Nordnet
 account. Nordnet exposes a public API, but it requires OAuth / session token
 setup, which adds non-trivial configuration and a new dependency. Worth doing
 once the simpler items above are stable.
@@ -106,7 +90,7 @@ to Nordnet is out of scope.
 
 ---
 
-## 7. Multiple bank format support
+## 6. Multiple bank format support
 
 Allow `accounts.toml` to declare the CSV format per account:
 
