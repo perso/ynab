@@ -44,6 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-reconcile", dest="reconcile", action="store_false", default=True,
         help="skip balance reconciliation check (reconciliation is on by default)",
     )
+    upload.add_argument(
+        "--clean", action="store_true",
+        help="delete input files after successful upload (only files with valid account config are deleted)",
+    )
     return parser
 
 
@@ -86,6 +90,7 @@ def run_app() -> None:
             upload_enabled=True,
             approve_enabled=args.approve,
             reconcile_enabled=args.reconcile,
+            clean_enabled=args.clean,
         )
     else:
         parser.print_help()

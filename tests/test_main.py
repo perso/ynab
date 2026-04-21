@@ -725,6 +725,101 @@ class TestConvertBankTransactionsWithReconcile(unittest.TestCase):
         os.removedirs(temp_dir)
 
 
+class TestConvertBankTransactionsWithClean(unittest.TestCase):
+    """Verify --clean deletes input files only when upload config is complete."""
+
+    def _run_with_clean(
+        self,
+        input_file: str,
+        output_file: str,
+        account_config: dict,
+    ) -> None:
+        service = _FakeBudgetService(created_count=1)
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=account_config),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
+        ):
+            convert_bank_transactions(
+                budget_service_factory=lambda _token: service,
+                upload_enabled=True,
+                clean_enabled=True,
+            )
+
+    def test_clean_deletes_input_file_after_successful_upload(self):
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/FI111_export.csv"
+        output_file = f"{temp_dir}/out.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        self._run_with_clean(input_file, output_file, _ACCOUNT_CONFIG_DEDUP)
+
+        self.assertFalse(os.path.exists(input_file))
+
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_clean_deletes_input_file_when_no_transactions_to_upload(self):
+        """File is deleted even when all transactions were already in YNAB (nothing to upload)."""
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/FI111_export.csv"
+        output_file = f"{temp_dir}/out.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Odottaa";"Ei"',
+        ])
+
+        self._run_with_clean(input_file, output_file, _ACCOUNT_CONFIG_DEDUP)
+
+        self.assertFalse(os.path.exists(input_file))
+
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_clean_does_not_delete_when_account_config_incomplete(self):
+        """Files whose account lacks budget_id/account_id are never deleted."""
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/FI111_export.csv"
+        output_file = f"{temp_dir}/out.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        self._run_with_clean(input_file, output_file, _ACCOUNT_CONFIG_SIMPLE)
+
+        self.assertTrue(os.path.exists(input_file))
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_clean_does_not_delete_unrecognised_file(self):
+        """A file skipped by form_file_paths (bad name/unknown account) is never deleted."""
+        temp_dir = mkdtemp()
+        wrong_file = f"{temp_dir}/not_a_bank_export.csv"
+        open(wrong_file, mode="w")
+
+        # form_file_paths runs for real here — wrong_file has no underscore so it's skipped
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
+        ):
+            with self.assertLogs("ynab.utilities.fs_util", level="WARNING"):
+                convert_bank_transactions(
+                    input_dir=wrong_file,
+                    output_dir=temp_dir,
+                    upload_enabled=True,
+                    clean_enabled=True,
+                )
+
+        self.assertTrue(os.path.exists(wrong_file))
+
+        os.remove(wrong_file)
+        os.removedirs(temp_dir)
+
+
 class TestRunApp(unittest.TestCase):
     @patch("ynab.cli.convert_bank_transactions")
     def test_run_app_upload_calls_convert_with_defaults(self, mock_convert):
@@ -739,6 +834,7 @@ class TestRunApp(unittest.TestCase):
             upload_enabled=True,
             approve_enabled=False,
             reconcile_enabled=True,
+            clean_enabled=False,
         )
 
     @patch("ynab.cli.convert_bank_transactions")
@@ -753,6 +849,7 @@ class TestRunApp(unittest.TestCase):
             upload_enabled=True,
             approve_enabled=False,
             reconcile_enabled=True,
+            clean_enabled=False,
         )
 
     @patch("ynab.cli.convert_bank_transactions")
@@ -773,6 +870,7 @@ class TestRunApp(unittest.TestCase):
             upload_enabled=True,
             approve_enabled=True,
             reconcile_enabled=False,
+            clean_enabled=False,
         )
 
     def test_run_app_no_subcommand_prints_help(self):

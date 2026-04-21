@@ -29,6 +29,7 @@ def convert_bank_transactions(
     upload_enabled: bool = False,
     approve_enabled: bool = False,
     reconcile_enabled: bool = False,
+    clean_enabled: bool = False,
     global_budget_id: Optional[str] = None,
 ) -> None:
     """Convert Finnish bank CSV exports to YNAB import CSVs.
@@ -70,6 +71,7 @@ def convert_bank_transactions(
         transactions = filter_unchecked_transactions(all_transactions)
         cfg = account_configs[mapping.account_no]
         effective_budget_id = cfg.budget_id or global_budget_id
+        upload_config_ok = bool(effective_budget_id and cfg.account_id)
 
         if dedup_enabled and transactions:
             if not effective_budget_id or not cfg.account_id:
@@ -123,3 +125,13 @@ def convert_bank_transactions(
                 log.info("    Bank balance:  %.2f", last_bank_balance)
                 log.info("    YNAB cleared:  %.2f", ynab_cleared)
                 log.info("    Difference:    %.2f  %s", diff, status)
+
+        if clean_enabled:
+            if not upload_config_ok:
+                log.warning(
+                    "  Clean skipped: missing account_id or budget_id in config for '%s'",
+                    mapping.account_no,
+                )
+            else:
+                Path(mapping.input_path).unlink()
+                log.info("  Deleted: %s", mapping.input_path)
