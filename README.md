@@ -38,16 +38,19 @@ All configuration and data files live under `~/.config/ynab/`:
 
 4. Place bank export CSVs in `~/.config/ynab/input/`. Filenames must follow the format `<account_no>_<anything>.csv`.
 
-5. Run the converter:
+5. Run the upload command:
    ```bash
-   poetry run ynab
+   poetry run ynab upload
    ```
 
-   Converted CSVs are written to `~/.config/ynab/output/`. Override the input or output location with `--input-dir` or `--output-dir` if needed.
+   Pass a directory path to use a different input location (e.g. `~/Downloads`):
+   ```bash
+   poetry run ynab upload ~/Downloads
+   ```
+
+   Converted CSVs are written to `~/.config/ynab/output/`. Override with `--output-dir` if needed.
 
 6. *(Optional)* Enable direct upload to YNAB — see **Direct upload** below.
-
-7. *(Optional)* Enable duplicate filtering — see **Deduplication** below.
 
 ## CLI reference
 
@@ -55,24 +58,23 @@ All configuration and data files live under `~/.config/ynab/`:
 usage: ynab <command> [options]
 
 commands:
-  init               create ~/.config/ynab/ with directories and a starter accounts.toml
-  upload             convert bank CSVs and upload transactions to YNAB
+  init                  create ~/.config/ynab/ with directories and a starter accounts.toml
+  upload [PATH]         convert bank CSVs and upload transactions to YNAB
 
 ynab upload options:
-  --input-dir PATH   directory containing bank export CSVs
+  PATH               directory containing bank export CSVs
                      (default: ~/.config/ynab/input)
   --output-dir PATH  directory for YNAB import CSVs
                      (default: ~/.config/ynab/output)
-  --dedup            fetch existing YNAB transactions and filter duplicates before uploading
+  --no-dedup         skip duplicate filtering (deduplication is on by default)
   --approve          mark uploaded transactions as approved (skips manual approval step)
-  --reconcile        compare bank balance from CSV against YNAB cleared balance and report the diff
-  --budget-id UUID   global YNAB budget ID; per-account value in accounts.toml takes precedence
+  --no-reconcile     skip balance reconciliation check (reconciliation is on by default)
 ```
 
 ## Direct upload
 
-When `--upload` is passed the tool POSTs transactions directly to the YNAB API
-after processing, eliminating the manual CSV import step in the YNAB app.
+The `upload` command POSTs transactions directly to the YNAB API after
+processing, eliminating the manual CSV import step in the YNAB app.
 Output CSVs are still written as before.
 
 Each transaction is assigned a deterministic `import_id` derived from its date,
@@ -87,23 +89,18 @@ if the tool is run again with the same input, making repeated runs safe.
    ```toml
    [accounts.FI1234567890]
    budget_name = "MyBudget"
-   budget_id   = "<budget-uuid>"   # optional if --budget-id is passed
+   budget_id   = "<budget-uuid>"
    account_id  = "<account-uuid>"
    ```
 
-   Accounts missing `account_id` or a resolvable `budget_id` are skipped with
-   a warning and their CSV output is still written.
-
-> **Recommended:** enable **Deduplication** alongside direct upload. Without it,
-> transactions entered manually in YNAB may be imported again because
-> `import_id` only guards against re-runs of this tool, not against duplicates
-> from other sources.
+   Accounts missing `account_id` or `budget_id` are skipped with a warning and
+   their CSV output is still written.
 
 ## Deduplication
 
-When `--dedup` is passed the tool fetches transactions from the YNAB API
-before writing each output file and removes any bank rows that already appear in
-YNAB (whether imported previously or entered manually).
+Enabled by default. The tool fetches transactions from the YNAB API before
+writing each output file and removes any bank rows that already appear in YNAB
+(whether imported previously or entered manually). Pass `--no-dedup` to skip.
 
 Match rule: same amount and date within a configurable tolerance (default ±3 days).
 Each YNAB transaction can match at most one bank row (1:1 consumption). The YNAB
@@ -118,7 +115,7 @@ tolerance, making each run idempotent for the same input data.
    ```toml
    [accounts.FI1234567890]
    budget_name = "MyBudget"
-   budget_id   = "<budget-uuid>"   # optional if --budget-id is passed
+   budget_id   = "<budget-uuid>"
    account_id  = "<account-uuid>"
    ```
 

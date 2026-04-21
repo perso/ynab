@@ -17,12 +17,12 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - YNAB API amounts are in milliunits (1000 = $1.00); bank CSV amounts are plain floats
 - Credentials are read from `~/.config/ynab/credentials`
 
-**Dedup flow (optional, `--dedup`):**
+**Dedup flow (on by default, disable with `--no-dedup`):**
 - `since_date` is derived from the earliest bank transaction date minus the effective `date_tolerance_days` (idempotent for the same input)
 - `YnabBudgetService` fetches transactions and `filter_already_in_ynab` removes matching rows
 - `date_tolerance_days` defaults to `DEFAULT_DATE_TOLERANCE_DAYS` (3) but can be overridden per account in `accounts.toml` (useful for credit cards with posting lag)
 
-**Upload flow (optional, `--upload`):**
+**Upload flow (`upload` subcommand):**
 - Runs after filter/dedup; calls `YnabBudgetService.create_transactions` for each account that has `budget_id` and `account_id` configured (skips with a warning otherwise)
 - `to_api_payloads` in `transaction_uploader.py` converts `BankTransaction` objects to API dicts; each gets a deterministic `import_id` = `sha256("{date}|{milliunits}|{payee}|{balance_milliunits}").hexdigest()[:36]`
 - `import_id` makes repeated runs idempotent: YNAB silently skips transactions it has already seen
@@ -31,7 +31,7 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 
 **Module layout:**
 - `ynab/converter.py` — `convert_bank_transactions`, top-level pipeline orchestration
-- `ynab/cli.py` — argument parsing, `run_init`, `run_app`
+- `ynab/cli.py` — argument parsing (`input_dir` positional, `--no-dedup`, `--no-reconcile`, `--approve`, `--output-dir`), `run_init`, `run_app`
 - `ynab/budget_service.py` — `BudgetService` protocol
 - `ynab/bank/` — transaction model, reader, writer, filters
 - `ynab/ynab_api/` — YNAB REST API client, `YnabBudgetService`, API payload conversion (`transaction_uploader.py`)
