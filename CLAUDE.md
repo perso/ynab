@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-This is a Python tool that reads bank transaction exports (Finnish bank CSV format) and converts them into YNAB-compatible CSV imports. Optionally uploads transactions directly to YNAB via the REST API, and optionally fetches existing transactions first to filter out duplicates.
+This is a Python tool that reads bank transaction exports (Finnish bank CSV format) and converts them into YNAB-compatible CSV imports. Optionally uploads transactions directly to YNAB via the REST API, and optionally fetches existing transactions first to filter out duplicates. Also supports updating YNAB tracking accounts (investments, mortgages, loans) interactively or non-interactively.
 
 **Data flow:**
 1. `TransactionReader` reads Finnish bank CSVs (`;`-delimited, `iso-8859-1` encoded, `dd.mm.yyyy` dates, comma-decimal amounts) into `BankTransaction` named tuples
@@ -15,7 +15,7 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 **Key domain details:**
 - `BankTransaction.status` is derived from two CSV columns: Finnish "Toteutunut"/"Kyllä" → RECONCILED, "Toteutunut"/"Ei" → CLEARED, otherwise PENDING
 - YNAB API amounts are in milliunits (1000 = $1.00); bank CSV amounts are plain floats
-- Credentials are read from `~/.config/ynab/credentials`
+- Credentials are read from the `YNAB_ACCESS_TOKEN` env var (preferred) or `~/.config/ynab/credentials`
 
 **Dedup flow (on by default, disable with `--no-dedup`):**
 - `since_date` is derived from the earliest bank transaction date minus the effective `date_tolerance_days` (idempotent for the same input)
@@ -28,12 +28,20 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - `import_id` makes repeated runs idempotent: YNAB silently skips transactions it has already seen
 - Output CSVs are still written regardless of upload status
 - Credentials are read once when either dedup or upload is enabled
+- `--clean` deletes input files after successful upload (only files with a matching, fully-configured account entry)
+
+**Tracking flow (`tracking` subcommand):**
+- `ynab tracking update` — interactive loop: fetches current balance for each tracking account, prompts user for new value, posts an adjustment transaction
+- `ynab tracking set SLUG AMOUNT` — non-interactive: sets one named tracking account to a specific balance
+- Tracking accounts are configured in `[tracking_accounts.SLUG]` sections of `accounts.toml`
+- `to_adjustment_payload` in `transaction_uploader.py` builds the API payload; `import_id` = `sha256("adj|{date}|{account_id}|{balance}").hexdigest()[:36]`
 
 **Module layout:**
 - `ynab/converter.py` — `convert_bank_transactions`, top-level pipeline orchestration
-- `ynab/cli.py` — argument parsing (`input_dir` positional, `--no-dedup`, `--no-reconcile`, `--approve`, `--output-dir`), `run_init`, `run_app`
+- `ynab/cli.py` — argument parsing (`build_parser`), `run_init`, `run_app` — CLI entry point
 - `ynab/budget_service.py` — `BudgetService` protocol
-- `ynab/bank/` — transaction model, reader, writer, filters
+- `ynab/tracking_updater.py` — `update_tracking_accounts`, `set_tracking_account` — tracking account balance management
+- `ynab/bank/` — transaction model, reader, writer, filters, duplicate filter
 - `ynab/ynab_api/` — YNAB REST API client, `YnabBudgetService`, API payload conversion (`transaction_uploader.py`)
 - `ynab/utilities/` — CSV/date/amount parsing, filesystem helpers, credentials and TOML config loading
 - `tests/` — mirrors `ynab/` structure

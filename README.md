@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/perso/ynab/actions/workflows/ci.yml/badge.svg)
 
-Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish bank format uses `;`-delimited fields, `iso-8859-1` encoding, `dd.mm.yyyy` dates, and comma decimal separators — this tool handles all of that and outputs the `Date,Payee,Memo,Amount` format that YNAB expects. Optionally uploads transactions directly to YNAB via the REST API, and optionally fetches existing transactions first to filter out duplicates.
+Converts Finnish bank CSV exports into YNAB-compatible import CSVs. The Finnish bank format uses `;`-delimited fields, `iso-8859-1` encoding, `dd.mm.yyyy` dates, and comma decimal separators — this tool handles all of that and outputs the `Date,Payee,Memo,Amount` format that YNAB expects. Optionally uploads transactions directly to YNAB via the REST API, and optionally fetches existing transactions first to filter out duplicates. Also supports updating YNAB tracking accounts (investments, mortgages, loans).
 
 **API reference:** <https://api.ynab.com>
 
@@ -12,8 +12,8 @@ All configuration and data files live under `~/.config/ynab/`:
 
 ```
 ~/.config/ynab/
-├── accounts.toml       # account number → budget name mapping
-├── credentials         # YNAB API token (one line)
+├── accounts.toml       # account number → budget name mapping; tracking account config
+├── credentials         # YNAB API token (one line); superseded by YNAB_ACCESS_TOKEN env var
 ├── input/              # place bank export CSVs here
 └── output/             # converted YNAB import CSVs are written here
 ```
@@ -59,8 +59,10 @@ All configuration and data files live under `~/.config/ynab/`:
 usage: ynab <command> [options]
 
 commands:
-  init                  create ~/.config/ynab/ with directories and a starter accounts.toml
-  upload [PATH]         convert bank CSVs and upload transactions to YNAB
+  init                      create ~/.config/ynab/ with directories and a starter accounts.toml
+  upload [PATH]             convert bank CSVs and upload transactions to YNAB
+  tracking update           interactively update all tracking account balances
+  tracking set SLUG AMOUNT  set one tracking account to a specific balance
 
 ynab upload options:
   PATH               CSV file or directory of CSV files to import
@@ -86,7 +88,7 @@ if the tool is run again with the same input, making repeated runs safe.
 
 **Configuration:**
 
-1. Add your YNAB API token to `~/.config/ynab/credentials`.
+1. Add your YNAB API token to `~/.config/ynab/credentials` (or set the `YNAB_ACCESS_TOKEN` environment variable).
 
 2. Add `budget_id` and `account_id` to each account in `accounts.toml`:
    ```toml
@@ -112,7 +114,7 @@ tolerance, making each run idempotent for the same input data.
 
 **Configuration:**
 
-1. Add your YNAB API token to `~/.config/ynab/credentials`.
+1. Add your YNAB API token to `~/.config/ynab/credentials` (or set `YNAB_ACCESS_TOKEN`).
 
 2. Add `budget_id` and `account_id` to each account in `accounts.toml`:
    ```toml
@@ -134,9 +136,49 @@ account_id          = "<account-uuid>"
 date_tolerance_days = 7
 ```
 
+**Per-account memo template:**
+
+Customise the YNAB memo field using bank category data:
+
+```toml
+[accounts.FI1234567890]
+budget_name   = "MyBudget"
+memo_template = "{category} / {sub_category}"
+```
+
+## Tracking accounts
+
+The `tracking` subcommand updates YNAB tracking accounts (investments, mortgages,
+loans) that are not linked to a bank feed. It posts a balance-adjustment
+transaction so the account balance reflects the current real-world value.
+
+**`ynab tracking update`** — interactive mode: fetches the current balance for
+each configured tracking account, prompts you to enter the new balance, and
+posts an adjustment. Press Enter to skip an account.
+
+**`ynab tracking set SLUG AMOUNT`** — non-interactive: set one account directly,
+useful for scripting.
+
+**Configuration** — add `[tracking_accounts.SLUG]` sections to `accounts.toml`:
+
+```toml
+[tracking_accounts.nordnet]
+name       = "Nordnet Investments"
+budget_id  = "<budget-uuid>"
+account_id = "<account-uuid>"
+
+[tracking_accounts.mortgage]
+name       = "Home Loan"
+budget_id  = "<budget-uuid>"
+account_id = "<account-uuid>"
+```
+
 ## Authentication
 
-The tool uses a **personal access token** stored at `~/.config/ynab/credentials`.
+The tool uses a **personal access token**. Supply it in either of two ways:
+- Set the `YNAB_ACCESS_TOKEN` environment variable (takes precedence), or
+- Write the token to `~/.config/ynab/credentials` (one line, no extra whitespace).
+
 This is appropriate for a single-user development workstation.
 
 For multi-user or production deployments, **OAuth 2.0** should be used instead.
@@ -151,17 +193,18 @@ removed but OAuth support is left as future work.
 | `ynab/converter.py` | `convert_bank_transactions` — top-level pipeline orchestration |
 | `ynab/cli.py` | Argument parsing (`build_parser`), `run_init`, `run_app` — CLI entry point |
 | `ynab/budget_service.py` | `BudgetService` protocol (interface for the YNAB API layer) |
+| `ynab/tracking_updater.py` | `update_tracking_accounts`, `set_tracking_account` — tracking account balance management |
 | `ynab/bank/transaction.py` | `BankTransaction` NamedTuple and `TransactionStatus` enum |
 | `ynab/bank/transaction_reader.py` | Parses Finnish bank CSVs into `BankTransaction` lists |
 | `ynab/bank/transaction_writer.py` | Writes YNAB import CSVs |
 | `ynab/bank/transaction_filters.py` | `filter_unchecked_transactions` — keeps only CLEARED transactions |
 | `ynab/bank/duplicate_filter.py` | `filter_already_in_ynab` — removes bank rows already present in YNAB |
-| `ynab/ynab_api/transaction_uploader.py` | `to_api_payloads` — converts `BankTransaction` lists to YNAB API payloads |
+| `ynab/ynab_api/transaction_uploader.py` | `to_api_payloads`, `to_adjustment_payload` — converts `BankTransaction` lists to YNAB API payloads |
 | `ynab/ynab_api/ynab_api_client.py` | `YnabApiClient` — fetches and creates transactions via the YNAB REST API |
 | `ynab/ynab_api/ynab_budget_service.py` | `YnabBudgetService` — `BudgetService` implementation backed by `YnabApiClient` |
 | `ynab/utilities/parse_util.py` | Date and amount parsing helpers for the Finnish CSV format |
 | `ynab/utilities/fs_util.py` | `form_file_paths` — maps input files to output paths via the account map |
-| `ynab/utilities/config_util.py` | `read_credentials_file`, `read_accounts_config` — credentials and TOML config loading |
+| `ynab/utilities/config_util.py` | `read_credentials_file`, `read_accounts_config`, `read_tracking_accounts_config` — credentials and TOML config loading |
 
 ## Running tests
 
