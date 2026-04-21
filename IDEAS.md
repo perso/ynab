@@ -66,6 +66,8 @@ cause false negatives if payee matching is always on.
 **Note:** The existing sort key already includes payee for determinism, so the
 data is available — it just is not used in the match condition today.
 
+**Danger:** The payee name is not guaranteed to match between bank and YNAB.
+
 ---
 
 ## 5. Payee harmonization
