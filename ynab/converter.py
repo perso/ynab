@@ -5,13 +5,14 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from ynab.bank.duplicate_filter import DEFAULT_DATE_TOLERANCE_DAYS, derive_since_date, filter_already_in_ynab
+from ynab.bank.payee_harmonizer import harmonize_payees
 from ynab.bank.transaction import BankTransaction
 from ynab.bank.transaction_filters import filter_unchecked_transactions
 from ynab.bank.transaction_reader import read_transactions
 from ynab.bank.transaction_writer import write_transactions
 from ynab.budget_service import BudgetService
 from ynab.summary import AccountSummary, print_summary
-from ynab.utilities.config_util import read_accounts_config, read_credentials_file
+from ynab.utilities.config_util import read_accounts_config, read_credentials_file, read_payee_rules
 from ynab.utilities.fs_util import form_file_paths
 from ynab.ynab_api.ynab_api_client import TransactionsResponse
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
@@ -51,6 +52,7 @@ def convert_bank_transactions(
     tests without modifying this function.
     """
     account_configs = read_accounts_config(str(_CONFIG_DIR / "accounts.toml"))
+    payee_rules = read_payee_rules(str(_CONFIG_DIR / "accounts.toml"))
     need_api = dedup_enabled or upload_enabled or reconcile_enabled
     token: Optional[str] = read_credentials_file() if need_api else None
     budget_service: Optional[BudgetService] = budget_service_factory(token) if need_api else None  # type: ignore[arg-type]
@@ -74,6 +76,7 @@ def convert_bank_transactions(
             if transactions_with_balance else None
         )
         transactions = filter_unchecked_transactions(all_transactions)
+        transactions = harmonize_payees(transactions, payee_rules)
         n_cleared = len(transactions)
 
         cfg = account_configs[mapping.account_no]

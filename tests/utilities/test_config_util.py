@@ -9,6 +9,7 @@ from ynab.utilities.config_util import (
     TrackingAccountConfig,
     read_accounts_config,
     read_credentials_file,
+    read_payee_rules,
     read_tracking_accounts_config,
 )
 
@@ -258,3 +259,39 @@ budget_id = "b1"
     def test_missing_file_raises(self):
         with self.assertRaises(FileNotFoundError):
             read_tracking_accounts_config("/nonexistent/accounts.toml")
+
+
+class TestReadPayeeRules(unittest.TestCase):
+    def test_parses_rules(self):
+        path = _write_toml("""
+[payee_rules]
+"K-CITYMARKET.*" = "K-Citymarket"
+"IF VAKUUTUS.*"  = "If Vakuutus"
+""")
+        result = read_payee_rules(path)
+        self.assertEqual(result, {"K-CITYMARKET.*": "K-Citymarket", "IF VAKUUTUS.*": "If Vakuutus"})
+        os.remove(path)
+
+    def test_absent_section_returns_empty_dict(self):
+        path = _write_toml("""
+[accounts.FI123]
+budget_name = "Checking"
+""")
+        result = read_payee_rules(path)
+        self.assertEqual(result, {})
+        os.remove(path)
+
+    def test_missing_file_returns_empty(self):
+        result = read_payee_rules("/nonexistent/accounts.toml")
+        self.assertEqual(result, {})
+
+    def test_preserves_insertion_order(self):
+        path = _write_toml("""
+[payee_rules]
+"ZETTLE.*"       = "Zettle"
+"K-CITYMARKET.*" = "K-Citymarket"
+"IF VAKUUTUS.*"  = "If Vakuutus"
+""")
+        result = read_payee_rules(path)
+        self.assertEqual(list(result.keys()), ["ZETTLE.*", "K-CITYMARKET.*", "IF VAKUUTUS.*"])
+        os.remove(path)

@@ -36,3 +36,4 @@ class BankTransaction(NamedTuple):
     amount: float
     balance: Optional[float]
     status: TransactionStatus
+    original_payee: Optional[str] = None
