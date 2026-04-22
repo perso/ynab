@@ -10,6 +10,7 @@ from ynab.bank.transaction_filters import filter_unchecked_transactions
 from ynab.bank.transaction_reader import read_transactions
 from ynab.bank.transaction_writer import write_transactions
 from ynab.budget_service import BudgetService
+from ynab.summary import AccountSummary, print_summary
 from ynab.utilities.config_util import read_accounts_config, read_credentials_file
 from ynab.utilities.fs_util import form_file_paths
 from ynab.ynab_api.ynab_api_client import TransactionsResponse
@@ -60,15 +61,21 @@ def convert_bank_transactions(
         accountno_budget_map={k: v.budget_name for k, v in account_configs.items()},
     )
 
+    summaries: List[AccountSummary] = []
+
     for mapping in mappings:
         log.info("\n%s  →  %s", mapping.account_no, Path(mapping.output_path).name)
         all_transactions = source_factory(mapping.input_path)
+        n_read = len(all_transactions)
+
         transactions_with_balance = [t for t in all_transactions if t.balance is not None]
         last_bank_balance: Optional[float] = (
             max(transactions_with_balance, key=lambda t: t.date).balance
             if transactions_with_balance else None
         )
         transactions = filter_unchecked_transactions(all_transactions)
+        n_cleared = len(transactions)
+
         cfg = account_configs[mapping.account_no]
         effective_budget_id = cfg.budget_id or global_budget_id
         upload_config_ok = bool(effective_budget_id and cfg.account_id)
@@ -90,20 +97,27 @@ def convert_bank_transactions(
             )
 
         transactions = sorted(set(transactions))
+        n_deduped = n_cleared - len(transactions)
+
         write_transactions(mapping.output_path, transactions, memo_template=cfg.memo_template)
 
-        if upload_enabled and transactions:
-            if not effective_budget_id or not cfg.account_id:
-                log.warning(
-                    "  Upload skipped: missing account_id or budget_id in config for '%s'",
-                    mapping.account_no,
-                )
-            else:
-                budget_service.create_transactions(  # type: ignore[union-attr]
-                    effective_budget_id, cfg.account_id, transactions,
-                    approved=approve_enabled, memo_template=cfg.memo_template,
-                )
+        n_uploaded: Optional[int] = None
+        if upload_enabled:
+            n_uploaded = 0
+            if transactions:
+                if not effective_budget_id or not cfg.account_id:
+                    log.warning(
+                        "  Upload skipped: missing account_id or budget_id in config for '%s'",
+                        mapping.account_no,
+                    )
+                else:
+                    n_uploaded = budget_service.create_transactions(  # type: ignore[union-attr]
+                        effective_budget_id, cfg.account_id, transactions,
+                        approved=approve_enabled, memo_template=cfg.memo_template,
+                    )
 
+        balance_ok: Optional[bool] = None
+        balance_diff: Optional[float] = None
         if reconcile_enabled:
             if not effective_budget_id or not cfg.account_id:
                 log.warning(
@@ -121,7 +135,9 @@ def convert_bank_transactions(
                 )
                 ynab_cleared = account.cleared_balance / 1000.0
                 diff = last_bank_balance - ynab_cleared
-                status = "✓" if diff == 0 else "✗"
+                balance_ok = diff == 0
+                balance_diff = diff
+                status = "✓" if balance_ok else "✗"
                 log.info("  Reconciliation (%s):", account.name)
                 log.info("    Bank balance:  %.2f", last_bank_balance)
                 log.info("    YNAB cleared:  %.2f", ynab_cleared)
@@ -136,3 +152,16 @@ def convert_bank_transactions(
             else:
                 Path(mapping.input_path).unlink()
                 log.info("  Deleted: %s", mapping.input_path)
+
+        summaries.append(AccountSummary(
+            account_name=cfg.budget_name,
+            read=n_read,
+            pending=n_read - n_cleared,
+            deduped=n_deduped,
+            uploaded=n_uploaded,
+            balance_ok=balance_ok,
+            balance_diff=balance_diff,
+            bank_balance=last_bank_balance if balance_ok is not None else None,
+        ))
+
+    print_summary(summaries)

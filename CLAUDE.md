@@ -40,6 +40,7 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - `ynab/converter.py` — `convert_bank_transactions`, top-level pipeline orchestration
 - `ynab/cli.py` — argument parsing (`build_parser`), `run_init`, `run_app` — CLI entry point
 - `ynab/budget_service.py` — `BudgetService` protocol
+- `ynab/summary.py` — `AccountSummary` dataclass, `print_summary` — per-account upload summary table
 - `ynab/tracking_updater.py` — `update_tracking_accounts`, `set_tracking_account` — tracking account balance management
 - `ynab/bank/` — transaction model, reader, writer, filters, duplicate filter
 - `ynab/ynab_api/` — YNAB REST API client, `YnabBudgetService`, API payload conversion (`transaction_uploader.py`)

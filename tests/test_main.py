@@ -895,6 +895,147 @@ class TestRunApp(unittest.TestCase):
         mock_parser.print_help.assert_called_once()
 
 
+class TestConverterSummary(unittest.TestCase):
+    """Verify that convert_bank_transactions emits a summary after processing."""
+
+    def _run(self, input_file: str, output_file: str, **kwargs) -> None:
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+        ):
+            convert_bank_transactions(dedup_enabled=False, upload_enabled=False, **kwargs)
+
+    def test_summary_logged_after_processing(self):
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+            '"19.04.2023";"Cat";"Sub";"Shop B";"-7,70";"";"Odottaa";"Ei"',
+        ])
+
+        with self.assertLogs("ynab.summary", level="INFO") as cm:
+            self._run(input_file, output_file)
+
+        joined = "\n".join(cm.output)
+        self.assertIn("Read", joined)
+        self.assertIn("Pending", joined)
+        self.assertIn("Budget", joined)  # budget_name from _ACCOUNT_CONFIG_SIMPLE
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_summary_counts_pending_correctly(self):
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop A";"-55,00";"100,00";"Toteutunut";"Ei"',
+            '"19.04.2023";"Cat";"Sub";"Shop B";"-7,70";"";"Odottaa";"Ei"',
+        ])
+
+        with self.assertLogs("ynab.summary", level="INFO") as cm:
+            self._run(input_file, output_file)
+
+        # 2 read, 1 pending → data row should contain "2" and "1"
+        data_lines = [entry for entry in cm.output if "Budget" in entry]
+        self.assertEqual(len(data_lines), 1)
+        self.assertIn("2", data_lines[0])
+        self.assertIn("1", data_lines[0])
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_summary_upload_column_shows_count_when_enabled(self):
+        service = _FakeBudgetService(created_count=1)
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
+            self.assertLogs("ynab.summary", level="INFO") as cm,
+        ):
+            convert_bank_transactions(
+                budget_service_factory=lambda _token: service,
+                upload_enabled=True,
+            )
+
+        data_lines = [entry for entry in cm.output if "Budget" in entry]
+        self.assertEqual(len(data_lines), 1)
+        # uploaded=1 (from created_count)
+        self.assertIn("1", data_lines[0])
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_summary_upload_column_shows_dash_when_disabled(self):
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with self.assertLogs("ynab.summary", level="INFO") as cm:
+            self._run(input_file, output_file)
+
+        data_lines = [entry for entry in cm.output if "Budget" in entry]
+        self.assertEqual(len(data_lines), 1)
+        self.assertIn("—", data_lines[0])
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_summary_balance_check_shown_when_reconcile_enabled(self):
+        service = _FakeBudgetService(account=YnabAccount("a1", "Checking", 100000))
+        temp_dir = mkdtemp()
+        input_file = f"{temp_dir}/input.csv"
+        output_file = f"{temp_dir}/output.csv"
+        _write_input_csv(input_file, [
+            '"20.04.2023";"Cat";"Sub";"Shop";"-10,00";"100,00";"Toteutunut";"Ei"',
+        ])
+
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_DEDUP),
+            patch("ynab.converter.form_file_paths",
+                  return_value=[FilePathMapping("FI111", input_file, output_file)]),
+            patch("ynab.converter.read_credentials_file", return_value="token"),
+            self.assertLogs("ynab.summary", level="INFO") as cm,
+        ):
+            convert_bank_transactions(
+                budget_service_factory=lambda _token: service,
+                reconcile_enabled=True,
+            )
+
+        data_lines = [entry for entry in cm.output if "Budget" in entry]
+        self.assertEqual(len(data_lines), 1)
+        self.assertIn("✓", data_lines[0])
+
+        os.remove(input_file)
+        os.remove(output_file)
+        os.removedirs(temp_dir)
+
+    def test_no_summary_when_no_files(self):
+        with (
+            patch("ynab.converter.read_accounts_config", return_value=_ACCOUNT_CONFIG_SIMPLE),
+            patch("ynab.converter.form_file_paths", return_value=[]),
+        ):
+            # Should not raise; no summary emitted since no accounts processed
+            convert_bank_transactions(dedup_enabled=False, upload_enabled=False)
+
+
 class TestRunInit(unittest.TestCase):
     def test_init_creates_directories_and_template(self):
         from importlib.resources import files

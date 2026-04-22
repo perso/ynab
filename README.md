@@ -193,6 +193,7 @@ removed but OAuth support is left as future work.
 | `ynab/converter.py` | `convert_bank_transactions` — top-level pipeline orchestration |
 | `ynab/cli.py` | Argument parsing (`build_parser`), `run_init`, `run_app` — CLI entry point |
 | `ynab/budget_service.py` | `BudgetService` protocol (interface for the YNAB API layer) |
+| `ynab/summary.py` | `AccountSummary` dataclass, `print_summary` — per-account upload summary table |
 | `ynab/tracking_updater.py` | `update_tracking_accounts`, `set_tracking_account` — tracking account balance management |
 | `ynab/bank/transaction.py` | `BankTransaction` NamedTuple and `TransactionStatus` enum |
 | `ynab/bank/transaction_reader.py` | Parses Finnish bank CSVs into `BankTransaction` lists |
