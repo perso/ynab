@@ -30,6 +30,11 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - Credentials are read once when either dedup or upload is enabled
 - `--clean` deletes input files after successful upload (only files with a matching, fully-configured account entry)
 
+**Status flow (`status` subcommand):**
+- `ynab status` — reads all unique `budget_id` values from `accounts.toml` (regular and tracking accounts), calls `GET /plans/{budget_id}/months/current` for each, and renders a per-category spending table
+- `render_dashboard` filters out hidden, deleted, and fully-inactive categories; flags overspent categories (negative balance) with ⚠
+- `CategorySummary` and `BudgetMonth` in `ynab_api_client.py` model the API response; `get_budget_month` in the same module performs the HTTP call
+
 **Tracking flow (`tracking` subcommand):**
 - `ynab tracking update` — interactive loop: fetches current balance for each tracking account, prompts user for new value, posts an adjustment transaction
 - `ynab tracking set SLUG AMOUNT` — non-interactive: sets one named tracking account to a specific balance
@@ -41,6 +46,7 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - `ynab/cli.py` — argument parsing (`build_parser`), `run_init`, `run_app` — CLI entry point
 - `ynab/budget_service.py` — `BudgetService` protocol
 - `ynab/summary.py` — `AccountSummary` dataclass, `print_summary` — per-account upload summary table
+- `ynab/budget_dashboard.py` — `run_status`, `render_dashboard` — current-month spending summary (`ynab status`)
 - `ynab/tracking_updater.py` — `update_tracking_accounts`, `set_tracking_account` — tracking account balance management
 - `ynab/bank/` — transaction model, reader, writer, filters, duplicate filter
 - `ynab/ynab_api/` — YNAB REST API client, `YnabBudgetService`, API payload conversion (`transaction_uploader.py`)

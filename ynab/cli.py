@@ -4,6 +4,7 @@ import argparse
 import logging
 from importlib.resources import files
 
+from ynab.budget_dashboard import run_status
 from ynab.converter import _CONFIG_DIR, convert_bank_transactions
 from ynab.tracking_updater import run_tracking_set, run_tracking_update
 
@@ -48,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
     upload.add_argument(
         "--clean", action="store_true",
         help="delete input files after successful upload (only files with valid account config are deleted)",
+    )
+
+    subparsers.add_parser(
+        "status",
+        help="show current month spending summary for all configured budgets",
     )
 
     tracking = subparsers.add_parser(
@@ -104,6 +110,8 @@ def run_app() -> None:
     args = parser.parse_args()
     if args.command == "init":
         run_init()
+    elif args.command == "status":
+        run_status()
     elif args.command == "upload":
         convert_bank_transactions(
             input_dir=args.input_dir,
