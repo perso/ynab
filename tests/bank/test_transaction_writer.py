@@ -40,6 +40,21 @@ class TestFormatMemo(unittest.TestCase):
         result = format_memo(txn, "{category} / {sub_category}")
         self.assertEqual(result, " / ")
 
+    def test_original_payee_only_no_template(self):
+        txn = _BARBER._replace(payee="Barber", original_payee="ZETTLE*TMI BARBER HELSINKI")
+        self.assertEqual(format_memo(txn, None), "ZETTLE*TMI BARBER HELSINKI")
+
+    def test_original_payee_with_template(self):
+        txn = _BARBER._replace(payee="Barber", original_payee="ZETTLE*TMI BARBER HELSINKI")
+        result = format_memo(txn, "{category} / {sub_category}")
+        self.assertEqual(
+            result,
+            "ZETTLE*TMI BARBER HELSINKI | Vaatteet, terveys ja hyvinvointi / Kampaamo- ja parturipalvelut",
+        )
+
+    def test_no_original_payee_no_template_is_empty(self):
+        self.assertEqual(format_memo(_BARBER, None), "")
+
 
 class TestTransactionWriter(unittest.TestCase):
     def setUp(self) -> None:

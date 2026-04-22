@@ -45,3 +45,16 @@ date_tolerance_days = 7
 # name       = "Mortgage"
 # budget_id  = "ynab-budget-uuid"
 # account_id = "ynab-account-uuid"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Payee harmonization — map raw bank payee strings to clean canonical names.
+# Rules are applied in order; the first matching pattern wins.
+# Patterns are Python re.fullmatch expressions (anchored at both ends), so use
+# .* to match trailing characters.  The original raw payee is preserved in the
+# YNAB memo field for traceability.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# [payee_rules]
+# "ZETTLE\\*TMI BARBER.*" = "Barber"
+# "K-CITYMARKET.*"        = "K-Citymarket"
+# "IF VAKUUTUS.*"         = "If Vakuutus"

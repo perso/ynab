@@ -147,3 +147,23 @@ def read_tracking_accounts_config(path: Union[str, Path]) -> Dict[str, TrackingA
             account_id=cfg["account_id"],
         )
     return result
+
+
+def read_payee_rules(path: Union[str, Path]) -> Dict[str, str]:
+    """Read payee harmonization rules from the ``[payee_rules]`` section of a TOML file.
+
+    Returns an ordered dict of ``{regex_pattern: replacement_name}``, preserving
+    TOML insertion order so first-match-wins semantics hold.  Returns an empty
+    dict when the section is absent or the file does not exist (rules are optional;
+    ``read_accounts_config`` is the authoritative check for file existence).
+
+    Args:
+        path: Path to the TOML config file (same file as ``read_accounts_config``).
+    """
+    p = Path(path)
+    try:
+        with open(p, "rb") as f:
+            data = tomllib.load(f)
+    except FileNotFoundError:
+        return {}
+    return dict(data.get("payee_rules", {}))

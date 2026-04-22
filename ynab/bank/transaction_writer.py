@@ -10,15 +10,16 @@ _HEADER = ["Date", "Payee", "Memo", "Amount"]
 
 
 def format_memo(txn: BankTransaction, template: Optional[str]) -> str:
-    """Format a memo string from a bank transaction using a template.
+    """Format a memo string from a bank transaction.
 
-    The template may reference ``{category}`` and ``{sub_category}`` fields
-    from the transaction (e.g. ``"{category} / {sub_category}"``).
-    Returns an empty string when ``template`` is ``None`` or empty.
+    When the payee was harmonized, ``txn.original_payee`` holds the raw bank
+    string and is prepended to the template output separated by `` | ``.
+    The template may reference ``{category}`` and ``{sub_category}``.
+    Returns an empty string when neither original payee nor template is present.
     """
-    if not template:
-        return ""
-    return template.format(category=txn.category, sub_category=txn.sub_category)
+    template_part = template.format(category=txn.category, sub_category=txn.sub_category) if template else ""
+    parts = [p for p in (txn.original_payee, template_part) if p]
+    return " | ".join(parts)
 
 
 def write_transactions(
