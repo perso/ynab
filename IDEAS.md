@@ -5,7 +5,9 @@ YNAB API integrations in the middle, big architectural changes last.
 
 ---
 
-## 1. Goal progress after tracking update
+## 1. Add category groups to current month budget dashboard
+
+## 2. Goal progress after tracking update
 
 After `ynab tracking update` posts balance adjustments, fetch
 `GET /budgets/{id}/months/current` and read `goal_percentage_complete` for any
