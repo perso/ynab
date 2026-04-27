@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bank → YNAB Converter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f2f2f7;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    main {
+      max-width: 600px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-top: 1rem;
+    }
+
+    .subtitle {
+      color: #555;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      margin-top: 0.35rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .upload-area {
+      border: 2px dashed #ccc;
+      border-radius: 12px;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      background: white;
+      transition: border-color 0.15s, background 0.15s;
+      color: #444;
+    }
+
+    .upload-area.drag-over {
+      border-color: #00B6E3;
+      background: #f0fbff;
+    }
+
+    .upload-label {
+      display: inline-block;
+      background: #00B6E3;
+      color: white;
+      padding: 0.875rem 1.75rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 0.75rem;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .upload-label:active { opacity: 0.85; }
+
+    .upload-label input[type="file"] { display: none; }
+
+    .upload-hint {
+      font-size: 0.78rem;
+      color: #999;
+      margin-top: 0.6rem;
+    }
+
+    .summary {
+      padding: 1rem 1.25rem;
+      font-size: 0.9rem;
+      line-height: 1.8;
+    }
+
+    .summary-count {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    .skipped { color: #999; }
+
+    .download-btn {
+      background: #00B6E3;
+      color: white;
+      border: none;
+      padding: 1rem;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .download-btn:active { opacity: 0.85; }
+
+    .preview-title {
+      padding: 0.7rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #888;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .preview-scroll { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      background: #fafafa;
+      border-bottom: 1px solid #eee;
+      font-weight: 600;
+      color: #666;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid #f5f5f5;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .amount { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .amount-neg { color: #c0392b; }
+    .amount-pos { color: #27ae60; }
+
+    .error-box {
+      background: #fff3f3;
+      border: 1px solid #f5c6c6;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      color: #c0392b;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .privacy-note {
+      font-size: 0.75rem;
+      color: #bbb;
+      text-align: center;
+      padding-bottom: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <h1>Bank &rarr; YNAB</h1>
+      <p class="subtitle">Convert a Finnish bank CSV export to YNAB import format.<br>Everything runs in your browser &mdash; your data never leaves this page.</p>
+    </div>
+
+    <div class="upload-area" id="uploadArea">
+      <div>Drop your bank CSV here, or</div>
+      <label class="upload-label">
+        Choose file
+        <input type="file" accept=".csv" id="fileInput">
+      </label>
+      <div class="upload-hint">Semicolon-delimited export from your bank's app</div>
+    </div>
+
+    <div id="errorBox" class="error-box" hidden></div>
+
+    <div id="results" hidden>
+      <div class="card">
+        <div class="summary" id="summary"></div>
+      </div>
+
+      <button class="download-btn" id="downloadBtn">Download YNAB CSV</button>
+
+      <div class="card">
+        <div class="preview-title">Preview</div>
+        <div class="preview-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Payee</th>
+                <th>Memo</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <p class="privacy-note">Your financial data never leaves this page.</p>
+  </main>
+
+  <script>
+    // --- CSV parsing ---
+
+    function parseCsvRow(line) {
+      const fields = [];
+      let field = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            // Escaped quote inside quoted field
+            field += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ';' && !inQuotes) {
+          fields.push(field);
+          field = '';
+        } else {
+          field += ch;
+        }
+      }
+      fields.push(field);
+      return fields;
+    }
+
+    function parseDate(s) {
+      // dd.mm.yyyy → yyyy-mm-dd
+      const parts = s.split('.');
+      if (parts.length !== 3) throw new Error(`Invalid date: "${s}"`);
+      const [d, m, y] = parts;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    function parseAmount(s) {
+      // Finnish comma decimal, optional space thousands separator
+      const cleaned = s.replace(/,/g, '.').replace(/ /g, '');
+      if (cleaned === '') throw new Error('Amount field is empty');
+      const n = parseFloat(cleaned);
+      if (isNaN(n)) throw new Error(`Invalid amount: "${s}"`);
+      return n;
+    }
+
+    function formatMemo(category, subCategory) {
+      const cat = category.trim();
+      const sub = subCategory.trim();
+      if (!cat && !sub) return '';
+      return `${cat} / ${sub}`;
+    }
+
+    function resolveStatus(tila, tarkastettu) {
+      if (tila === 'Toteutunut' && tarkastettu === 'Kyllä') return 'RECONCILED';
+      if (tila === 'Toteutunut' && tarkastettu === 'Ei') return 'CLEARED';
+      return 'PENDING'; // Odottaa or anything else
+    }
+
+    // --- Conversion ---
+
+    function convert(arrayBuffer) {
+      const text = new TextDecoder('iso-8859-1').decode(arrayBuffer);
+      const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+
+      if (lines.length < 2) throw new Error('File appears to be empty or contains no data rows.');
+
+      const cleared = [];
+      let pendingCount = 0;
+      let reconciledCount = 0;
+
+      // Index 0 is the header row; data starts at index 1
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseCsvRow(lines[i]);
+        if (row.length < 8) {
+          throw new Error(`Row ${i + 1} has ${row.length} column(s), expected 8. Is this the right file?`);
+        }
+
+        const tila = row[6].trim();
+        const tarkastettu = row[7].trim();
+        const status = resolveStatus(tila, tarkastettu);
+
+        if (status === 'PENDING') { pendingCount++; continue; }
+        if (status === 'RECONCILED') { reconciledCount++; continue; }
+
+        cleared.push({
+          date: parseDate(row[0].trim()),
+          category: row[1].trim(),
+          subCategory: row[2].trim(),
+          payee: row[3].trim(),
+          amount: parseAmount(row[4].trim()),
+        });
+      }
+
+      return { cleared, pendingCount, reconciledCount };
+    }
+
+    function buildCsv(transactions) {
+      const escapeField = v => {
+        if (/[",\r\n]/.test(v)) return '"' + v.replace(/"/g, '""') + '"';
+        return v;
+      };
+      const rows = ['Date,Payee,Memo,Amount'];
+      for (const t of transactions) {
+        rows.push([
+          t.date,
+          escapeField(t.payee),
+          escapeField(formatMemo(t.category, t.subCategory)),
+          String(t.amount),
+        ].join(','));
+      }
+      return rows.join('\n');
+    }
+
+    // --- UI ---
+
+    const fileInput = document.getElementById('fileInput');
+    const uploadArea = document.getElementById('uploadArea');
+    const results = document.getElementById('results');
+    const summary = document.getElementById('summary');
+    const previewBody = document.getElementById('previewBody');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const errorBox = document.getElementById('errorBox');
+
+    let csvContent = '';
+    let outputFilename = 'ynab-import.csv';
+
+    function escapeHtml(s) {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.hidden = false;
+      results.hidden = true;
+    }
+
+    function processFile(file) {
+      errorBox.hidden = true;
+      if (!file) return;
+      outputFilename = file.name.replace(/\.csv$/i, '') + '-ynab.csv';
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const { cleared, pendingCount, reconciledCount } = convert(e.target.result);
+
+          if (cleared.length === 0) {
+            showError('No importable transactions found — all rows were either pending or already reconciled.');
+            return;
+          }
+
+          csvContent = buildCsv(cleared);
+
+          // Build summary line
+          const skippedParts = [];
+          if (pendingCount > 0) skippedParts.push(`${pendingCount} pending`);
+          if (reconciledCount > 0) skippedParts.push(`${reconciledCount} reconciled`);
+          const skippedHtml = skippedParts.length
+            ? ` <span class="skipped">(${skippedParts.join(', ')} skipped)</span>`
+            : '';
+          summary.innerHTML =
+            `<span class="summary-count">${cleared.length} transaction${cleared.length !== 1 ? 's' : ''} ready to import</span>${skippedHtml}`;
+
+          // Build preview table
+          previewBody.innerHTML = '';
+          for (const t of cleared) {
+            const tr = document.createElement('tr');
+            const amtClass = t.amount < 0 ? 'amount-neg' : 'amount-pos';
+            tr.innerHTML = `
+              <td>${escapeHtml(t.date)}</td>
+              <td>${escapeHtml(t.payee)}</td>
+              <td>${escapeHtml(formatMemo(t.category, t.subCategory))}</td>
+              <td class="amount ${amtClass}">${escapeHtml(String(t.amount))}</td>
+            `;
+            previewBody.appendChild(tr);
+          }
+
+          results.hidden = false;
+        } catch (err) {
+          showError(`Could not parse file: ${err.message}`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    fileInput.addEventListener('change', e => processFile(e.target.files[0]));
+
+    // Drag-and-drop support (useful on desktop)
+    uploadArea.addEventListener('dragover', e => {
+      e.preventDefault();
+      uploadArea.classList.add('drag-over');
+    });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+    uploadArea.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadArea.classList.remove('drag-over');
+      processFile(e.dataTransfer.files[0]);
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = outputFilename;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
