@@ -41,6 +41,7 @@ class TrackingAccountConfig(NamedTuple):
     name: str
     budget_id: str
     account_id: str
+    negative: bool = False
 
 
 class AccountConfig(NamedTuple):
@@ -145,6 +146,7 @@ def read_tracking_accounts_config(path: Union[str, Path]) -> Dict[str, TrackingA
             name=cfg["name"],
             budget_id=cfg["budget_id"],
             account_id=cfg["account_id"],
+            negative=bool(cfg.get("negative", False)),
         )
     return result
 

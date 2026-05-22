@@ -45,6 +45,7 @@ date_tolerance_days = 7
 # name       = "Mortgage"
 # budget_id  = "ynab-budget-uuid"
 # account_id = "ynab-account-uuid"
+# negative   = true   # auto-negates positive input (mortgages/loans always have a negative YNAB balance)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Payee harmonization — map raw bank payee strings to clean canonical names.

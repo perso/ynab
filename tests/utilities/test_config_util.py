@@ -256,6 +256,29 @@ budget_id = "b1"
         self.assertIn("account_id", str(ctx.exception))
         os.remove(path)
 
+    def test_negative_flag_parsed(self):
+        path = _write_toml("""
+[tracking_accounts.mortgage]
+name       = "Mortgage"
+budget_id  = "b1"
+account_id = "a1"
+negative   = true
+""")
+        result = read_tracking_accounts_config(path)
+        self.assertTrue(result["mortgage"].negative)
+        os.remove(path)
+
+    def test_negative_flag_defaults_to_false(self):
+        path = _write_toml("""
+[tracking_accounts.nordnet]
+name       = "Nordnet"
+budget_id  = "b1"
+account_id = "a1"
+""")
+        result = read_tracking_accounts_config(path)
+        self.assertFalse(result["nordnet"].negative)
+        os.remove(path)
+
     def test_missing_file_raises(self):
         with self.assertRaises(FileNotFoundError):
             read_tracking_accounts_config("/nonexistent/accounts.toml")

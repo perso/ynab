@@ -12,6 +12,7 @@ _TODAY = datetime.date(2026, 4, 21)
 
 _CFG_NORDNET = TrackingAccountConfig("Nordnet", "budget-1", "acc-nordnet")
 _CFG_MORTGAGE = TrackingAccountConfig("Mortgage", "budget-1", "acc-mortgage")
+_CFG_MORTGAGE_NEG = TrackingAccountConfig("Mortgage", "budget-1", "acc-mortgage", negative=True)
 
 _ACCOUNT_NORDNET = YnabAccount(id="acc-nordnet", name="Nordnet", cleared_balance=44_500_000)
 _ACCOUNT_MORTGAGE = YnabAccount(id="acc-mortgage", name="Mortgage", cleared_balance=-185_500_000)
@@ -57,7 +58,7 @@ def _prompt_returning(values: List[Optional[float]]):
     """Return a prompt_fn that yields pre-set values in order."""
     it = iter(values)
 
-    def _fn(name: str, current: float) -> Optional[float]:
+    def _fn(name: str, current: float, negative: bool = False) -> Optional[float]:
         return next(it)
 
     return _fn
@@ -164,6 +165,41 @@ class TestUpdateTrackingAccounts(unittest.TestCase):
         self.assertEqual(adj, -500_000)
 
 
+class TestNegativeFlag(unittest.TestCase):
+    def test_positive_input_auto_negated_for_negative_account(self):
+        svc = _FakeService({"acc-mortgage": _ACCOUNT_MORTGAGE})
+        update_tracking_accounts(
+            svc,
+            [_CFG_MORTGAGE_NEG],
+            today=_TODAY,
+            prompt_fn=_prompt_returning([185_000.00]),  # user typed positive
+        )
+        self.assertEqual(len(svc.adjustment_calls), 1)
+        _, _, _, new_bal, _ = svc.adjustment_calls[0]
+        self.assertEqual(new_bal, -185_000_000)  # stored as negative
+
+    def test_already_negative_input_unchanged_for_negative_account(self):
+        svc = _FakeService({"acc-mortgage": _ACCOUNT_MORTGAGE})
+        update_tracking_accounts(
+            svc,
+            [_CFG_MORTGAGE_NEG],
+            today=_TODAY,
+            prompt_fn=_prompt_returning([-185_500.00]),  # user typed exact negative (matches current)
+        )
+        self.assertEqual(len(svc.adjustment_calls), 0)  # no change (same balance)
+
+    def test_positive_flag_not_applied_to_non_negative_account(self):
+        svc = _FakeService({"acc-nordnet": _ACCOUNT_NORDNET})
+        update_tracking_accounts(
+            svc,
+            [_CFG_NORDNET],
+            today=_TODAY,
+            prompt_fn=_prompt_returning([45_000.00]),
+        )
+        _, _, _, new_bal, _ = svc.adjustment_calls[0]
+        self.assertEqual(new_bal, 45_000_000)  # stays positive
+
+
 class TestSetTrackingAccount(unittest.TestCase):
     def test_posts_adjustment_when_balance_changes(self):
         svc = _FakeService({"acc-nordnet": _ACCOUNT_NORDNET})
@@ -196,5 +232,12 @@ class TestSetTrackingAccount(unittest.TestCase):
         set_tracking_account(svc, _CFG_MORTGAGE, -184_000.00, today=_TODAY)
         _, _, adj, new_bal, _ = svc.adjustment_calls[0]
         # -184000 - (-185500) = 1500 → 1500000 mu
+        self.assertEqual(adj, 1_500_000)
+        self.assertEqual(new_bal, -184_000_000)
+
+    def test_positive_input_auto_negated_when_negative_flag_set(self):
+        svc = _FakeService({"acc-mortgage": _ACCOUNT_MORTGAGE})
+        set_tracking_account(svc, _CFG_MORTGAGE_NEG, 184_000.00, today=_TODAY)
+        _, _, adj, new_bal, _ = svc.adjustment_calls[0]
         self.assertEqual(adj, 1_500_000)
         self.assertEqual(new_bal, -184_000_000)

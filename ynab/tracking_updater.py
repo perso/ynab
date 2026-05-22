@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 _CONFIG_DIR = Path.home() / ".config" / "ynab"
 
 
-def _prompt_new_balance(name: str, current_balance: float) -> Optional[float]:
+def _prompt_new_balance(name: str, current_balance: float, negative: bool = False) -> Optional[float]:
     """Show the current YNAB balance and prompt for a new value.
 
     Returns ``None`` when the user presses Enter without typing (skip).
@@ -27,8 +27,9 @@ def _prompt_new_balance(name: str, current_balance: float) -> Optional[float]:
     """
     print(f"\n{name}")
     print(f"  Current YNAB balance: {current_balance:,.2f}")
+    hint = "positive → negated, Enter to skip" if negative else "Enter to skip"
     while True:
-        raw = input("  New balance (Enter to skip): ").strip()
+        raw = input(f"  New balance ({hint}): ").strip()
         if not raw:
             return None
         try:
@@ -42,7 +43,7 @@ def update_tracking_accounts(
     tracking_configs: List[TrackingAccountConfig],
     *,
     today: datetime.date,
-    prompt_fn: Callable[[str, float], Optional[float]] = _prompt_new_balance,
+    prompt_fn: Callable[[str, float, bool], Optional[float]] = _prompt_new_balance,
 ) -> None:
     """Core loop: prompt for each tracking account and post any balance adjustments.
 
@@ -70,7 +71,9 @@ def update_tracking_accounts(
         account = budget_service.get_account(cfg.budget_id, cfg.account_id)
         current_balance = account.cleared_balance / 1000.0
 
-        new_balance = prompt_fn(cfg.name, current_balance)
+        new_balance = prompt_fn(cfg.name, current_balance, cfg.negative)
+        if new_balance is not None and cfg.negative and new_balance > 0:
+            new_balance = -new_balance
         if new_balance is None:
             log.info("  Skipped.")
             continue
@@ -138,6 +141,8 @@ def set_tracking_account(
     Fetches the current YNAB cleared balance and posts an adjustment only when
     the new balance differs.  No-ops when the balance is already correct.
     """
+    if cfg.negative and new_balance > 0:
+        new_balance = -new_balance
     account = budget_service.get_account(cfg.budget_id, cfg.account_id)
     new_milliunits = to_milliunits(new_balance)
     adjustment_milliunits = new_milliunits - account.cleared_balance
