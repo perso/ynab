@@ -1,6 +1,7 @@
 """Budget spending dashboard for the current month."""
 
 import logging
+import unicodedata
 from pathlib import Path
 from typing import Callable, List
 
@@ -15,6 +16,46 @@ from ynab.ynab_api.ynab_budget_service import YnabBudgetService
 log = logging.getLogger(__name__)
 
 _CONFIG_DIR = Path.home() / ".config" / "ynab"
+
+
+def _display_width(s: str) -> int:
+    """Return the terminal display width of *s*.
+
+    Wide and fullwidth Unicode characters (most emoji, CJK) occupy 2 columns.
+    Combining marks and variation selectors occupy 0 columns.
+    A character followed by U+FE0F (variation selector-16) is always 2 columns —
+    VS16 forces emoji presentation, which renders wide even when unicodedata
+    classifies the base character as narrow (e.g. 🛠️, 🛏️).
+    ZWJ sequences (e.g. 🧚‍♀️) render as a single glyph: U+200D and the
+    character immediately following it contribute 0 additional columns.
+    """
+    chars = list(s)
+    width = 0
+    skip_next = False
+    for i, ch in enumerate(chars):
+        cp = ord(ch)
+        # ZWJ: the character immediately after it is part of the same compound glyph.
+        if cp == 0x200D:
+            skip_next = True
+            continue
+        # Zero-width: combining marks and variation selectors.
+        if unicodedata.combining(ch) or 0xFE00 <= cp <= 0xFE0F:
+            continue
+        # Modifier character in a ZWJ compound glyph.
+        if skip_next:
+            skip_next = False
+            continue
+        next_is_vs16 = i + 1 < len(chars) and ord(chars[i + 1]) == 0xFE0F
+        if unicodedata.east_asian_width(ch) in ("W", "F") or next_is_vs16:
+            width += 2
+        else:
+            width += 1
+    return width
+
+
+def _ljust(s: str, width: int) -> str:
+    """Left-justify *s* to display *width*, accounting for wide characters."""
+    return s + " " * max(0, width - _display_width(s))
 
 
 def _collect_budget_ids(config_path: str) -> List[str]:
@@ -71,7 +112,7 @@ def render_dashboard(month: BudgetMonth, group_filter: str | None = None) -> Non
         return
 
     # +2 for the two-space indent added when printing category rows
-    name_width = max(len(c.name) + 2 for c in visible)
+    name_width = max(_display_width(c.name) + 2 for c in visible)
     name_width = max(name_width, len("Category"))
 
     col_widths = (name_width, 10, 10, 12)
@@ -102,7 +143,7 @@ def render_dashboard(month: BudgetMonth, group_filter: str | None = None) -> Non
         remaining_str = f"{warn}{remaining:,.2f}"
 
         print(
-            f"  {cat.name:<{col_widths[0] - 2}}  "
+            f"  {_ljust(cat.name, col_widths[0] - 2)}  "
             f"{budgeted:>{col_widths[1]}}  "
             f"{spent:>{col_widths[2]}}  "
             f"{remaining_str:>{col_widths[3]}}"

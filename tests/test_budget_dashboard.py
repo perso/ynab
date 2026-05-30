@@ -2,7 +2,12 @@ import unittest
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
-from ynab.budget_dashboard import _collect_budget_ids, render_dashboard, run_status
+from ynab.budget_dashboard import (
+    _collect_budget_ids,
+    _display_width,
+    render_dashboard,
+    run_status,
+)
 from ynab.ynab_api.ynab_api_client import BudgetMonth, CategorySummary
 
 _CAT_GROCERIES = CategorySummary(
@@ -56,6 +61,42 @@ _CAT_ZERO = CategorySummary(
 )
 
 
+class TestDisplayWidth(unittest.TestCase):
+    def test_ascii_string(self):
+        self.assertEqual(_display_width("Hello"), 5)
+
+    def test_emoji_counts_as_two_columns(self):
+        # 📃 is a wide emoji — should count as 2, not 1
+        self.assertEqual(_display_width("📃"), 2)
+
+    def test_variation_selector_is_zero_width(self):
+        # U+FE0F (variation selector-16) adds no display width
+        self.assertEqual(_display_width("️"), 0)
+
+    def test_wide_emoji_with_variation_selector(self):
+        # 📃️ = U+1F4C3 (wide, 2) + U+FE0F variation selector (0) → still 2
+        self.assertEqual(_display_width("\U0001f4c3️"), 2)
+
+    def test_narrow_emoji_forced_wide_by_variation_selector(self):
+        # 🛠️ and 🛏️ are classified narrow by unicodedata but display as wide
+        # in terminals because U+FE0F forces emoji (wide) presentation.
+        self.assertEqual(_display_width("🛠️"), 2)
+        self.assertEqual(_display_width("🛏️"), 2)
+
+    def test_zwj_sequence_counts_as_two_columns(self):
+        # 🧚‍♀️ = 🧚 + U+200D (ZWJ) + ♀ + U+FE0F — renders as one 2-column glyph.
+        # ZWJ and the characters following it must not add to the width.
+        self.assertEqual(_display_width("🧚‍♀️"), 2)
+
+    def test_zwj_sequence_prefix_name(self):
+        # "🧚‍♀️ Patreon": 2 (glyph) + 1 (space) + 7 (Patreon) = 10
+        self.assertEqual(_display_width("🧚‍♀️ Patreon"), 10)
+
+    def test_emoji_prefix_name(self):
+        # "📃 Home Insurance": 📃(2) + space(1) + "Home Insurance"(14) = 17
+        self.assertEqual(_display_width("📃 Home Insurance"), 17)
+
+
 class TestRenderDashboard(unittest.TestCase):
     @patch("sys.stdout", new_callable=StringIO)
     def test_renders_header_and_rows(self, mock_stdout):
@@ -105,6 +146,46 @@ class TestRenderDashboard(unittest.TestCase):
         self.assertEqual(output.count("Online Subscriptions"), 1)
         self.assertEqual(output.count("Everyday Expenses"), 1)
         self.assertEqual(output.count("Bills"), 1)
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_emoji_names_do_not_break_column_alignment(self, mock_stdout):
+        # Regression: emoji are 2 display columns wide but len() counts them as 1,
+        # causing numeric columns to shift right for rows with emoji names.
+        _cat_emoji = CategorySummary(
+            name="📃 Home Insurance",
+            category_group_name="Bills",
+            budgeted=30480,
+            activity=-10120,
+            balance=20360,
+            hidden=False,
+            deleted=False,
+        )
+        _cat_plain = CategorySummary(
+            name="Internet",
+            category_group_name="Bills",
+            budgeted=13500,
+            activity=-13500,
+            balance=0,
+            hidden=False,
+            deleted=False,
+        )
+        month = BudgetMonth(month="2026-04-01", categories=[_cat_emoji, _cat_plain])
+        render_dashboard(month)
+        lines = mock_stdout.getvalue().splitlines()
+
+        # Find the two data rows and check that their numeric columns start at
+        # the same character position (i.e. the tab stop after the name column).
+        data_lines = [line for line in lines if "Home Insurance" in line or "Internet" in line]
+        self.assertEqual(len(data_lines), 2)
+
+        # The budgeted amount must start at the same DISPLAY column.
+        # Char indices differ (emoji is 1 char, 2 cols) but display positions must match.
+        idx_emoji = data_lines[0].index("30.48")
+        idx_plain = data_lines[1].index("13.50")
+        self.assertEqual(
+            _display_width(data_lines[0][:idx_emoji]),
+            _display_width(data_lines[1][:idx_plain]),
+        )
 
     @patch("sys.stdout", new_callable=StringIO)
     def test_renders_group_headers(self, mock_stdout):
