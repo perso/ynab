@@ -57,7 +57,7 @@ def render_dashboard(month: BudgetMonth, group_filter: str | None = None) -> Non
     If *group_filter* is given, only groups whose name contains that string
     (case-insensitive) are shown.
     """
-    visible = _active_categories(month)
+    visible = sorted(_active_categories(month), key=lambda c: c.category_group_name)
 
     if group_filter:
         needle = group_filter.lower()

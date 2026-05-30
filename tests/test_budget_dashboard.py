@@ -73,6 +73,40 @@ class TestRenderDashboard(unittest.TestCase):
         self.assertIn("Everyday Expenses", output)
 
     @patch("sys.stdout", new_callable=StringIO)
+    def test_each_group_header_appears_once_when_categories_interleaved(self, mock_stdout):
+        # Regression: API may return categories in non-contiguous group order,
+        # which caused a new header to be printed every time the group changed.
+        _cat_apple = CategorySummary(
+            name="Apple",
+            category_group_name="Online Subscriptions",
+            budgeted=19000, activity=-19000, balance=0,
+            hidden=False, deleted=False,
+        )
+        _cat_piano = CategorySummary(
+            name="Piano Marvel",
+            category_group_name="Online Subscriptions",
+            budgeted=17000, activity=0, balance=50000,
+            hidden=False, deleted=False,
+        )
+        _cat_extra = CategorySummary(
+            name="Extra Charges",
+            category_group_name="Bills",
+            budgeted=7000, activity=-7000, balance=0,
+            hidden=False, deleted=False,
+        )
+        # Interleaved: Bills → Online Subscriptions → Bills → Online Subscriptions
+        month = BudgetMonth(
+            month="2026-04-01",
+            categories=[_CAT_GROCERIES, _cat_apple, _cat_extra, _cat_piano],
+        )
+        render_dashboard(month)
+        output = mock_stdout.getvalue()
+
+        self.assertEqual(output.count("Online Subscriptions"), 1)
+        self.assertEqual(output.count("Everyday Expenses"), 1)
+        self.assertEqual(output.count("Bills"), 1)
+
+    @patch("sys.stdout", new_callable=StringIO)
     def test_renders_group_headers(self, mock_stdout):
         _cat_rent = CategorySummary(
             name="Rent",
