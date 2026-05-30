@@ -18,6 +18,16 @@ All configuration and data files live under `~/.config/ynab/`:
 └── output/             # converted YNAB import CSVs are written here
 ```
 
+## Installation
+
+Install the `ynab` command locally with [pipx](https://pipx.pypa.io):
+
+```bash
+pipx install --force .
+```
+
+This makes `ynab` available on your `PATH` without activating a virtual environment. Re-run the same command to pick up code changes.
+
 ## Quick start
 
 1. Install dependencies:
@@ -61,7 +71,7 @@ usage: ynab <command> [options]
 commands:
   init                      create ~/.config/ynab/ with directories and a starter accounts.toml
   upload [PATH]             convert bank CSVs and upload transactions to YNAB
-  status                    show current month spending summary for all configured budgets
+  status [-g NAME]          show current month spending summary for all configured budgets
   tracking update           interactively update all tracking account balances
   tracking set SLUG AMOUNT  set one tracking account to a specific balance
 
@@ -75,6 +85,10 @@ ynab upload options:
   --no-reconcile     skip balance reconciliation check (reconciliation is on by default)
   --clean            delete input files after successful upload
                      (only files with a matching account config entry are deleted)
+
+ynab status options:
+  -g, --group NAME   show only categories in groups whose name contains NAME
+                     (case-insensitive substring match)
 ```
 
 ## Direct upload
@@ -177,19 +191,30 @@ account_id = "<account-uuid>"
 ## Budget dashboard
 
 `ynab status` fetches the current month's category data from the YNAB API and
-prints a per-category spending summary:
+prints a per-category spending summary, grouped by category group:
 
 ```
 2026-04-01
-Category                 Budgeted       Spent    Remaining
-──────────────────────────────────────────────────────────
-Groceries                  400.00     -312.40        87.60
-Dining out                 150.00     -187.20     ⚠ -37.20
-Transport                  100.00      -44.00        56.00
+Category                   Budgeted       Spent    Remaining
+────────────────────────────────────────────────────────────
+Everyday Expenses
+  Groceries                  400.00     -312.40        87.60
+  Dining out                 150.00     -187.20    ⚠ -37.20
+
+Transport
+  Public transit             100.00      -44.00        56.00
 ```
 
 Overspent categories (negative balance) are flagged with ⚠.  Hidden, deleted,
 and completely inactive categories are omitted.
+
+Pass `--group` (or `-g`) to filter to a specific group — useful when there are
+too many categories to fit on screen at once:
+
+```bash
+ynab status --group "Everyday"
+ynab status -g Housing
+```
 
 The command reads budget IDs from all entries in `accounts.toml` (regular and
 tracking accounts) and renders a table for each distinct budget found.

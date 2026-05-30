@@ -51,9 +51,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="delete input files after successful upload (only files with valid account config are deleted)",
     )
 
-    subparsers.add_parser(
+    status = subparsers.add_parser(
         "status",
         help="show current month spending summary for all configured budgets",
+    )
+    status.add_argument(
+        "--group", "-g", metavar="NAME",
+        help="show only categories in groups whose name contains NAME (case-insensitive)",
     )
 
     tracking = subparsers.add_parser(
@@ -111,7 +115,7 @@ def run_app() -> None:
     if args.command == "init":
         run_init()
     elif args.command == "status":
-        run_status()
+        run_status(group_filter=getattr(args, "group", None))
     elif args.command == "upload":
         convert_bank_transactions(
             input_dir=args.input_dir,

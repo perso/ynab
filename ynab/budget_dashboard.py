@@ -48,19 +48,30 @@ def _active_categories(month: BudgetMonth) -> List[CategorySummary]:
     ]
 
 
-def render_dashboard(month: BudgetMonth) -> None:
+def render_dashboard(month: BudgetMonth, group_filter: str | None = None) -> None:
     """Print a spending summary table for *month* to stdout.
 
     Categories are grouped by category group name. Overspent categories
     (negative balance) are flagged with a warning marker.
+
+    If *group_filter* is given, only groups whose name contains that string
+    (case-insensitive) are shown.
     """
     visible = _active_categories(month)
 
+    if group_filter:
+        needle = group_filter.lower()
+        visible = [c for c in visible if needle in c.category_group_name.lower()]
+
     if not visible:
-        print(f"\n{month.month}: no active categories to display.")
+        msg = f"\n{month.month}: no active categories to display."
+        if group_filter:
+            msg += f" (group filter: '{group_filter}')"
+        print(msg)
         return
 
-    name_width = max(len(c.name) for c in visible)
+    # +2 for the two-space indent added when printing category rows
+    name_width = max(len(c.name) + 2 for c in visible)
     name_width = max(name_width, len("Category"))
 
     col_widths = (name_width, 10, 10, 12)
@@ -79,7 +90,10 @@ def render_dashboard(month: BudgetMonth) -> None:
     prev_group: str = ""
     for cat in visible:
         if cat.category_group_name != prev_group:
+            if prev_group:
+                print()
             prev_group = cat.category_group_name
+            print(cat.category_group_name)
 
         budgeted = f"{cat.budgeted / 1000.0:,.2f}"
         spent = f"{cat.activity / 1000.0:,.2f}"
@@ -88,7 +102,7 @@ def render_dashboard(month: BudgetMonth) -> None:
         remaining_str = f"{warn}{remaining:,.2f}"
 
         print(
-            f"{cat.name:<{col_widths[0]}}  "
+            f"  {cat.name:<{col_widths[0] - 2}}  "
             f"{budgeted:>{col_widths[1]}}  "
             f"{spent:>{col_widths[2]}}  "
             f"{remaining_str:>{col_widths[3]}}"
@@ -97,6 +111,7 @@ def render_dashboard(month: BudgetMonth) -> None:
 
 def run_status(
     budget_service_factory: Callable[[str], YnabBudgetService] = YnabBudgetService,
+    group_filter: str | None = None,
 ) -> None:
     """Fetch the current month's budget summary and render a spending table.
 
@@ -120,4 +135,4 @@ def run_status(
 
     for budget_id in budget_ids:
         month = service.get_budget_month(budget_id)
-        render_dashboard(month)
+        render_dashboard(month, group_filter=group_filter)

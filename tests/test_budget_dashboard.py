@@ -70,6 +70,64 @@ class TestRenderDashboard(unittest.TestCase):
         self.assertIn("Remaining", output)
         self.assertIn("Groceries", output)
         self.assertIn("Dining out", output)
+        self.assertIn("Everyday Expenses", output)
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_renders_group_headers(self, mock_stdout):
+        _cat_rent = CategorySummary(
+            name="Rent",
+            category_group_name="Housing",
+            budgeted=1200000,
+            activity=-1200000,
+            balance=0,
+            hidden=False,
+            deleted=False,
+        )
+        month = BudgetMonth(month="2026-04-01", categories=[_CAT_GROCERIES, _cat_rent])
+        render_dashboard(month)
+        output = mock_stdout.getvalue()
+
+        self.assertIn("Everyday Expenses", output)
+        self.assertIn("Housing", output)
+        # group header appears before category row
+        self.assertLess(output.index("Everyday Expenses"), output.index("Groceries"))
+        self.assertLess(output.index("Housing"), output.index("Rent"))
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_group_filter_shows_matching_group(self, mock_stdout):
+        month = BudgetMonth(month="2026-04-01", categories=[_CAT_GROCERIES, _CAT_DINING])
+        render_dashboard(month, group_filter="everyday")
+        output = mock_stdout.getvalue()
+
+        self.assertIn("Groceries", output)
+        self.assertIn("Dining out", output)
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_group_filter_excludes_non_matching_groups(self, mock_stdout):
+        _cat_rent = CategorySummary(
+            name="Rent",
+            category_group_name="Housing",
+            budgeted=1200000,
+            activity=-1200000,
+            balance=0,
+            hidden=False,
+            deleted=False,
+        )
+        month = BudgetMonth(month="2026-04-01", categories=[_CAT_GROCERIES, _cat_rent])
+        render_dashboard(month, group_filter="Housing")
+        output = mock_stdout.getvalue()
+
+        self.assertIn("Rent", output)
+        self.assertNotIn("Groceries", output)
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_group_filter_no_match_shows_message(self, mock_stdout):
+        month = BudgetMonth(month="2026-04-01", categories=[_CAT_GROCERIES])
+        render_dashboard(month, group_filter="nonexistent")
+        output = mock_stdout.getvalue()
+
+        self.assertIn("no active categories", output)
+        self.assertIn("nonexistent", output)
 
     @patch("sys.stdout", new_callable=StringIO)
     def test_flags_overspent_with_warning(self, mock_stdout):
@@ -210,7 +268,19 @@ class TestRunStatus(unittest.TestCase):
         run_status(budget_service_factory=lambda token: fake_svc)
 
         fake_svc.get_budget_month.assert_called_once_with("bud-1")
-        mock_render.assert_called_once_with(month)
+        mock_render.assert_called_once_with(month, group_filter=None)
+
+    @patch("ynab.budget_dashboard.render_dashboard")
+    @patch("ynab.budget_dashboard.read_credentials_file", return_value="tok")
+    @patch("ynab.budget_dashboard._collect_budget_ids", return_value=["bud-1"])
+    def test_passes_group_filter_to_render(self, mock_ids, mock_creds, mock_render):
+        month = BudgetMonth(month="2026-04-01", categories=[])
+        fake_svc = MagicMock()
+        fake_svc.get_budget_month.return_value = month
+
+        run_status(budget_service_factory=lambda token: fake_svc, group_filter="Housing")
+
+        mock_render.assert_called_once_with(month, group_filter="Housing")
 
     @patch("ynab.budget_dashboard._collect_budget_ids", return_value=[])
     def test_exits_when_no_budget_ids(self, _mock_ids):
