@@ -5,6 +5,7 @@ import logging
 from importlib.resources import files
 
 from ynab.budget_dashboard import run_status
+from ynab.spending_trends import run_trends
 from ynab.converter import _CONFIG_DIR, convert_bank_transactions
 from ynab.tracking_updater import run_tracking_set, run_tracking_update
 
@@ -58,6 +59,15 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument(
         "--group", "-g", metavar="NAME",
         help="show only categories in groups whose name contains NAME (case-insensitive)",
+    )
+
+    trends = subparsers.add_parser(
+        "trends",
+        help="show spending trends: last month vs 3-month rolling average",
+    )
+    trends.add_argument(
+        "--top", "-n", type=int, default=5, metavar="N",
+        help="number of categories to show per section (default: 5)",
     )
 
     tracking = subparsers.add_parser(
@@ -126,6 +136,8 @@ def run_app() -> None:
             reconcile_enabled=args.reconcile,
             clean_enabled=args.clean,
         )
+    elif args.command == "trends":
+        run_trends(top_n=args.top)
     elif args.command == "tracking":
         if getattr(args, "tracking_command", None) == "update":
             run_tracking_update()
