@@ -77,7 +77,7 @@ def compute_trends(
     for cat in comparison.categories:
         if cat.hidden or cat.deleted or cat.activity == 0:
             continue
-        if cat.category_group_name == "Internal Master Category":
+        if cat.category_group_name in ("Internal Master Category", "Credit Card Payments"):
             continue
         past = history_activity.get(cat.name, [])
         if not any(a != 0 for a in past):

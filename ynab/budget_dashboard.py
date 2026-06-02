@@ -86,7 +86,7 @@ def _active_categories(month: BudgetMonth) -> List[CategorySummary]:
     return [
         c for c in month.categories
         if not c.hidden and not c.deleted
-        and c.category_group_name != "Internal Master Category"
+        and c.category_group_name not in ("Internal Master Category", "Credit Card Payments")
         and (c.budgeted != 0 or c.activity != 0)
     ]
 
