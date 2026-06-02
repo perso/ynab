@@ -85,7 +85,9 @@ def _active_categories(month: BudgetMonth) -> List[CategorySummary]:
     """Return non-hidden, non-deleted categories that have budget or activity."""
     return [
         c for c in month.categories
-        if not c.hidden and not c.deleted and (c.budgeted != 0 or c.activity != 0)
+        if not c.hidden and not c.deleted
+        and c.category_group_name != "Internal Master Category"
+        and (c.budgeted != 0 or c.activity != 0)
     ]
 
 
