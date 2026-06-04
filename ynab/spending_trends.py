@@ -138,6 +138,18 @@ def _render_section(
             f"{change:>{col_widths[3]}}"
         )
 
+    total_current = sum(t.current_spend for t in trends)
+    total_avg = sum(t.avg_spend for t in trends)
+    total_change = sum(t.change for t in trends)
+    sign = "+" if total_change > 0 else ""
+    print("─" * len(header))
+    print(
+        f"  {'Total':<{col_widths[0] - 2}}  "
+        f"{f'{total_current:,.2f}':>{col_widths[1]}}  "
+        f"{f'{total_avg:,.2f}':>{col_widths[2]}}  "
+        f"{f'{sign}{total_change:,.2f}':>{col_widths[3]}}"
+    )
+
 
 def render_trends(
     comparison_month: str,
@@ -160,6 +172,12 @@ def render_trends(
     print(f"\nSpending trends — {_month_label(comparison_month)} vs 3-month avg ({avg_label})")
     _render_section("Climbing", climbing, name_width, col_label)
     _render_section("Easing", easing, name_width, col_label)
+
+    net_change = sum(t.change for t in all_trends)
+    sign = "+" if net_change > 0 else ""
+    net_str = f"{sign}{net_change:,.2f}"
+    label_width = name_width + 2 + 10 + 2 + 10 + 2  # aligns value under Change column
+    print(f"\n{'Net change (shown categories)':<{label_width}}{net_str:>10}")
 
 
 def run_trends(

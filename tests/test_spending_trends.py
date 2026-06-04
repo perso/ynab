@@ -272,6 +272,44 @@ class TestRenderTrends(unittest.TestCase):
 
         self.assertIn("Apr 2026", output)
 
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_section_total_row_appears(self, mock_stdout):
+        climbing = [self._make_trend("Dining Out", 187.20, 82.30)]
+        easing = [self._make_trend("Entertainment", 12.00, 45.00)]
+        render_trends("2026-04-01", ["2026-01-01", "2026-02-01", "2026-03-01"], climbing, easing)
+        output = mock_stdout.getvalue()
+
+        self.assertIn("Total", output)
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_section_total_sums_change(self, mock_stdout):
+        # Two climbing trends: +104.90 and +50.00 → total +154.90
+        t1 = self._make_trend("Dining Out", 187.20, 82.30)   # change = +104.90
+        t2 = self._make_trend("Groceries", 200.00, 150.00)   # change = +50.00
+        render_trends("2026-04-01", ["2026-01-01", "2026-02-01", "2026-03-01"], [t1, t2], [])
+        output = mock_stdout.getvalue()
+
+        self.assertIn("+154.90", output)
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_net_change_line_appears(self, mock_stdout):
+        climbing = [self._make_trend("Dining Out", 187.20, 82.30)]   # +104.90
+        easing = [self._make_trend("Entertainment", 12.00, 45.00)]   # -33.00
+        render_trends("2026-04-01", ["2026-01-01", "2026-02-01", "2026-03-01"], climbing, easing)
+        output = mock_stdout.getvalue()
+
+        self.assertIn("Net change", output)
+        self.assertIn("+71.90", output)  # 104.90 - 33.00
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_net_change_negative(self, mock_stdout):
+        climbing = [self._make_trend("Dining Out", 50.00, 30.00)]    # +20.00
+        easing = [self._make_trend("Entertainment", 12.00, 100.00)]  # -88.00
+        render_trends("2026-04-01", ["2026-01-01", "2026-02-01", "2026-03-01"], climbing, easing)
+        output = mock_stdout.getvalue()
+
+        self.assertIn("-68.00", output)  # net = 20 - 88
+
 
 class TestRunTrends(unittest.TestCase):
     @patch("ynab.spending_trends.render_trends")
