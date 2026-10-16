@@ -35,6 +35,12 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - `render_dashboard` filters out hidden, deleted, and fully-inactive categories; flags overspent categories (negative balance) with ⚠
 - `CategorySummary` and `BudgetMonth` in `ynab_api_client.py` model the API response; `get_budget_month` in the same module performs the HTTP call
 
+**Buffer flow (`buffer` subcommand):**
+- `ynab buffer` — reads `[buffer]` from `accounts.toml`, fetches the last `history_months` complete months plus the current month for `budget_id`
+- `category_costs` computes `max(avg outflow, avg assigned)` per category, excluding the emergency category itself, Credit Card Payments and Internal Master Category; `keep` ratios (`"Group: Category"` beats `"Group"`, default 1.0) scale it to crisis cost
+- Per scenario: shortfall = `max(0, need − net_income)`, required = `need × income_delay_months + shortfall × months`; target = `max(required…, need × floor_months)`; runway uses the emergency category's current balance
+- `last_resort` lists `[tracking_accounts]` slugs whose balances (via `get_account`) are printed after a `market_drop` haircut; informational only, never counted toward the target
+
 **Tracking flow (`tracking` subcommand):**
 - `ynab tracking update` — interactive loop: fetches current balance for each tracking account, prompts user for new value, posts an adjustment transaction
 - `ynab tracking set SLUG AMOUNT` — non-interactive: sets one named tracking account to a specific balance
@@ -47,6 +53,7 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - `ynab/budget_service.py` — `BudgetService` protocol
 - `ynab/summary.py` — `AccountSummary` dataclass, `print_summary` — per-account upload summary table
 - `ynab/budget_dashboard.py` — `run_status`, `render_dashboard` — current-month spending summary (`ynab status`)
+- `ynab/buffer_estimate.py` — `run_buffer`, `category_costs`, `scenario_result` — emergency buffer estimate (`ynab buffer`)
 - `ynab/tracking_updater.py` — `update_tracking_accounts`, `set_tracking_account` — tracking account balance management
 - `ynab/bank/` — transaction model, reader, writer, filters, duplicate filter
 - `ynab/ynab_api/` — YNAB REST API client, `YnabBudgetService`, API payload conversion (`transaction_uploader.py`)

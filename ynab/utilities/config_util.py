@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, NamedTuple, Optional, Union
+from typing import Any, Dict, List, NamedTuple, Optional, Union
 
 try:
     import tomllib
@@ -169,3 +169,102 @@ def read_payee_rules(path: Union[str, Path]) -> Dict[str, str]:
     except FileNotFoundError:
         return {}
     return dict(data.get("payee_rules", {}))
+
+class BufferScenario(NamedTuple):
+    """An income-loss scenario: reduced net income for a number of months."""
+
+    name: str
+    net_income: float
+    months: float
+    income_delay_months: float = 0.0
+
+
+class BufferConfig(NamedTuple):
+    """Configuration for the ``ynab buffer`` emergency fund estimate."""
+
+    budget_id: str
+    category: str
+    scenarios: List[BufferScenario]
+    keep: Dict[str, float]
+    history_months: int = 12
+    floor_months: float = 3.0
+    last_resort: List[str] = []
+    market_drop: float = 0.3
+
+
+def _parse_scenario(name: str, cfg: Dict[str, Any]) -> BufferScenario:
+    for required in ("net_income", "months"):
+        if required not in cfg:
+            raise ValueError(f"Buffer scenario '{name}' is missing required key '{required}'")
+    return BufferScenario(
+        name=name,
+        net_income=float(cfg["net_income"]),
+        months=float(cfg["months"]),
+        income_delay_months=float(cfg.get("income_delay_months", 0.0)),
+    )
+
+
+def _parse_keep(raw: Dict[str, Any]) -> Dict[str, float]:
+    keep = {key: float(value) for key, value in raw.items()}
+    for key, value in keep.items():
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"Buffer keep ratio for '{key}' must be between 0 and 1, got {value}")
+    return keep
+
+
+def read_buffer_config(path: Union[str, Path]) -> Optional[BufferConfig]:
+    """Read the ``[buffer]`` section of a TOML file.
+
+    Expected format::
+
+        [buffer]
+        budget_id = "ynab-budget-uuid"
+        category  = "Emergency Fund"
+
+        [buffer.keep]
+        "Savings" = 0.0
+        "Regular: Groceries" = 0.85
+
+        [buffer.scenarios.unemployed]
+        net_income = 2200
+        months     = 6
+
+    ``last_resort`` lists tracking account slugs shown below the target,
+    valued after a ``market_drop`` (default 0.3) fall.
+
+    Returns ``None`` when the section is absent.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If a required key is missing, no scenario is defined,
+            or a keep ratio or ``market_drop`` is outside 0–1.
+    """
+    p = Path(path)
+    try:
+        with open(p, "rb") as f:
+            data = tomllib.load(f)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Accounts config file not found at {p}")
+
+    buffer = data.get("buffer")
+    if buffer is None:
+        return None
+    for required in ("budget_id", "category"):
+        if required not in buffer:
+            raise ValueError(f"[buffer] is missing required key '{required}'")
+    scenarios = [_parse_scenario(n, c) for n, c in buffer.get("scenarios", {}).items()]
+    if not scenarios:
+        raise ValueError("[buffer] needs at least one [buffer.scenarios.NAME] section")
+    market_drop = float(buffer.get("market_drop", 0.3))
+    if not 0.0 <= market_drop <= 1.0:
+        raise ValueError(f"[buffer] market_drop must be between 0 and 1, got {market_drop}")
+    return BufferConfig(
+        budget_id=buffer["budget_id"],
+        category=buffer["category"],
+        scenarios=scenarios,
+        keep=_parse_keep(buffer.get("keep", {})),
+        history_months=int(buffer.get("history_months", 12)),
+        floor_months=float(buffer.get("floor_months", 3.0)),
+        last_resort=list(buffer.get("last_resort", [])),
+        market_drop=market_drop,
+    )

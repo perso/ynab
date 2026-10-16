@@ -6,8 +6,10 @@ from tempfile import NamedTemporaryFile
 
 from ynab.utilities.config_util import (
     AccountConfig,
+    BufferScenario,
     TrackingAccountConfig,
     read_accounts_config,
+    read_buffer_config,
     read_credentials_file,
     read_payee_rules,
     read_tracking_accounts_config,
@@ -318,3 +320,79 @@ budget_name = "Checking"
         result = read_payee_rules(path)
         self.assertEqual(list(result.keys()), ["ZETTLE.*", "K-CITYMARKET.*", "IF VAKUUTUS.*"])
         os.remove(path)
+
+_BUFFER_TOML = """
+[buffer]
+budget_id = "bud-1"
+category  = "Emergency Fund"
+floor_months = 4
+
+[buffer.keep]
+"Savings" = 0.0
+"Regular: Groceries" = 0.85
+
+[buffer.scenarios.unemployed]
+net_income = 2200
+months = 6
+income_delay_months = 1
+"""
+
+
+class TestReadBufferConfig(unittest.TestCase):
+    def _read(self, content):
+        path = _write_toml(content)
+        try:
+            return read_buffer_config(path)
+        finally:
+            os.remove(path)
+
+    def test_returns_none_without_section(self):
+        self.assertIsNone(self._read("[accounts]\n"))
+
+    def test_parses_scenario(self):
+        scenario = self._read(_BUFFER_TOML).scenarios[0]
+        self.assertEqual(scenario, BufferScenario("unemployed", 2200.0, 6.0, 1.0))
+
+    def test_parses_keep_ratios(self):
+        self.assertEqual(self._read(_BUFFER_TOML).keep, {"Savings": 0.0, "Regular: Groceries": 0.85})
+
+    def test_defaults_history_months(self):
+        self.assertEqual(self._read(_BUFFER_TOML).history_months, 12)
+
+    def test_reads_floor_months(self):
+        self.assertEqual(self._read(_BUFFER_TOML).floor_months, 4.0)
+
+    def test_missing_category_raises(self):
+        with self.assertRaises(ValueError):
+            self._read(_BUFFER_TOML.replace('category  = "Emergency Fund"', ""))
+
+    def test_no_scenarios_raises(self):
+        with self.assertRaises(ValueError):
+            self._read('[buffer]\nbudget_id = "b"\ncategory = "E"\n')
+
+    def test_scenario_missing_income_raises(self):
+        with self.assertRaises(ValueError):
+            self._read(_BUFFER_TOML.replace("net_income = 2200", ""))
+
+    def test_keep_out_of_range_raises(self):
+        with self.assertRaises(ValueError):
+            self._read(_BUFFER_TOML.replace('"Savings" = 0.0', '"Savings" = 1.5'))
+
+    def test_missing_file_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            read_buffer_config("does/not/exist.toml")
+
+    def test_last_resort_defaults_to_empty(self):
+        self.assertEqual(self._read(_BUFFER_TOML).last_resort, [])
+
+    def test_reads_last_resort_slugs(self):
+        toml = _BUFFER_TOML.replace("floor_months = 4", 'floor_months = 4\nlast_resort = ["nordnet"]')
+        self.assertEqual(self._read(toml).last_resort, ["nordnet"])
+
+    def test_market_drop_defaults_to_thirty_percent(self):
+        self.assertEqual(self._read(_BUFFER_TOML).market_drop, 0.3)
+
+    def test_market_drop_out_of_range_raises(self):
+        toml = _BUFFER_TOML.replace("floor_months = 4", "floor_months = 4\nmarket_drop = 2")
+        with self.assertRaises(ValueError):
+            self._read(toml)
