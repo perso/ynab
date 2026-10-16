@@ -188,6 +188,8 @@ class BufferConfig(NamedTuple):
     keep: Dict[str, float]
     history_months: int = 12
     floor_months: float = 3.0
+    last_resort: List[str] = []
+    market_drop: float = 0.3
 
 
 def _parse_scenario(name: str, cfg: Dict[str, Any]) -> BufferScenario:
@@ -227,12 +229,15 @@ def read_buffer_config(path: Union[str, Path]) -> Optional[BufferConfig]:
         net_income = 2200
         months     = 6
 
+    ``last_resort`` lists tracking account slugs shown below the target,
+    valued after a ``market_drop`` (default 0.3) fall.
+
     Returns ``None`` when the section is absent.
 
     Raises:
         FileNotFoundError: If the file does not exist.
         ValueError: If a required key is missing, no scenario is defined,
-            or a keep ratio is outside 0–1.
+            or a keep ratio or ``market_drop`` is outside 0–1.
     """
     p = Path(path)
     try:
@@ -250,6 +255,9 @@ def read_buffer_config(path: Union[str, Path]) -> Optional[BufferConfig]:
     scenarios = [_parse_scenario(n, c) for n, c in buffer.get("scenarios", {}).items()]
     if not scenarios:
         raise ValueError("[buffer] needs at least one [buffer.scenarios.NAME] section")
+    market_drop = float(buffer.get("market_drop", 0.3))
+    if not 0.0 <= market_drop <= 1.0:
+        raise ValueError(f"[buffer] market_drop must be between 0 and 1, got {market_drop}")
     return BufferConfig(
         budget_id=buffer["budget_id"],
         category=buffer["category"],
@@ -257,4 +265,6 @@ def read_buffer_config(path: Union[str, Path]) -> Optional[BufferConfig]:
         keep=_parse_keep(buffer.get("keep", {})),
         history_months=int(buffer.get("history_months", 12)),
         floor_months=float(buffer.get("floor_months", 3.0)),
+        last_resort=list(buffer.get("last_resort", [])),
+        market_drop=market_drop,
     )

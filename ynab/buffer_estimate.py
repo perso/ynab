@@ -11,8 +11,10 @@ from ynab.spending_trends import _add_months
 from ynab.utilities.config_util import (
     BufferConfig,
     BufferScenario,
+    TrackingAccountConfig,
     read_buffer_config,
     read_credentials_file,
+    read_tracking_accounts_config,
 )
 from ynab.ynab_api.ynab_api_client import BudgetMonth
 from ynab.ynab_api.ynab_budget_service import YnabBudgetService
@@ -46,6 +48,13 @@ class ScenarioResult(NamedTuple):
     shortfall: float  # euros per month drawn from the buffer
     required: float   # euros needed to survive the whole scenario
     runway: float     # months the current buffer lasts; inf when income covers needs
+
+
+class LastResort(NamedTuple):
+    """A tracking account (e.g. investments) you could sell if the buffer runs out."""
+
+    name: str
+    balance: float  # euros
 
 
 def resolve_keep(group: str, name: str, keep_map: Dict[str, float]) -> float:
@@ -125,6 +134,27 @@ def emergency_balance(month: BudgetMonth, category: str) -> float:
     raise ValueError(f"Emergency category '{category}' not found in budget month {month.month}")
 
 
+def last_resort_accounts(
+    slugs: List[str],
+    tracking: Dict[str, TrackingAccountConfig],
+    service: YnabBudgetService,
+) -> List[LastResort]:
+    """Fetch the balances of the tracking accounts named by *slugs*.
+
+    Raises:
+        ValueError: If a slug has no ``[tracking_accounts.SLUG]`` section.
+    """
+    missing = [s for s in slugs if s not in tracking]
+    if missing:
+        raise ValueError(f"[buffer] last_resort names unknown tracking accounts: {missing}")
+    accounts = []
+    for slug in slugs:
+        cfg = tracking[slug]
+        account = service.get_account(cfg.budget_id, cfg.account_id)
+        accounts.append(LastResort(cfg.name, account.cleared_balance / 1000.0))
+    return accounts
+
+
 def _eur(amount: float) -> str:
     return f"{amount:,.0f}".replace(",", " ")
 
@@ -185,6 +215,15 @@ def render_buffer(
     )
 
 
+def render_last_resort(accounts: List[LastResort], market_drop: float) -> None:
+    """Print each last-resort account with its value after a *market_drop* fall."""
+    for a in accounts:
+        print(
+            f"  Last resort  {a.name} {_eur(a.balance)}"
+            f"  ({_eur(a.balance * (1 - market_drop))} after a {market_drop:.0%} drop)"
+        )
+
+
 def _period_label(months: List[str]) -> str:
     """['2026-10-01', …, '2025-11-01'] → 'Nov 2025–Oct 2026'"""
     dates = sorted(date.fromisoformat(m) for m in months)
@@ -219,4 +258,8 @@ def run_buffer(
     need = sum(c.crisis_cost for c in costs)
     results = [scenario_result(need, s, balance) for s in config.scenarios]
     target = buffer_target(need, results, config.floor_months)
+    tracking = read_tracking_accounts_config(config_path) if config.last_resort else {}
+    accounts = last_resort_accounts(config.last_resort, tracking, service)
+
     render_buffer(_period_label(month_strs), costs, results, config.category, balance, target)
+    render_last_resort(accounts, config.market_drop)

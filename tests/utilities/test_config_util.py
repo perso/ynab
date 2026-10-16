@@ -381,3 +381,18 @@ class TestReadBufferConfig(unittest.TestCase):
     def test_missing_file_raises(self):
         with self.assertRaises(FileNotFoundError):
             read_buffer_config("does/not/exist.toml")
+
+    def test_last_resort_defaults_to_empty(self):
+        self.assertEqual(self._read(_BUFFER_TOML).last_resort, [])
+
+    def test_reads_last_resort_slugs(self):
+        toml = _BUFFER_TOML.replace("floor_months = 4", 'floor_months = 4\nlast_resort = ["nordnet"]')
+        self.assertEqual(self._read(toml).last_resort, ["nordnet"])
+
+    def test_market_drop_defaults_to_thirty_percent(self):
+        self.assertEqual(self._read(_BUFFER_TOML).market_drop, 0.3)
+
+    def test_market_drop_out_of_range_raises(self):
+        toml = _BUFFER_TOML.replace("floor_months = 4", "floor_months = 4\nmarket_drop = 2")
+        with self.assertRaises(ValueError):
+            self._read(toml)

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from ynab.buffer_estimate import (
     CategoryCost,
+    LastResort,
     ScenarioResult,
     _bar,
     _eur,
@@ -13,14 +14,16 @@ from ynab.buffer_estimate import (
     buffer_target,
     category_costs,
     emergency_balance,
+    last_resort_accounts,
     render_buffer,
+    render_last_resort,
     resolve_keep,
     run_buffer,
     runway_months,
     scenario_result,
 )
-from ynab.utilities.config_util import BufferConfig, BufferScenario
-from ynab.ynab_api.ynab_api_client import BudgetMonth, CategorySummary
+from ynab.utilities.config_util import BufferConfig, BufferScenario, TrackingAccountConfig
+from ynab.ynab_api.ynab_api_client import BudgetMonth, CategorySummary, YnabAccount
 
 
 def _cat(name, group, activity=0, budgeted=0, balance=0, hidden=False, deleted=False):
@@ -178,6 +181,39 @@ class TestRenderBuffer(unittest.TestCase):
         self.assertIn("50%", output)
 
 
+_NORDNET = TrackingAccountConfig("Nordnet", "bud-2", "acc-1")
+
+
+class TestLastResortAccounts(unittest.TestCase):
+    def test_fetches_balance_in_euros(self):
+        svc = MagicMock()
+        svc.get_account.return_value = YnabAccount("acc-1", "Nordnet", 24_500_000)
+        result = last_resort_accounts(["nordnet"], {"nordnet": _NORDNET}, svc)
+        self.assertEqual(result, [LastResort("Nordnet", 24_500.0)])
+
+    def test_uses_tracking_account_budget(self):
+        svc = MagicMock()
+        svc.get_account.return_value = YnabAccount("acc-1", "Nordnet", 0)
+        last_resort_accounts(["nordnet"], {"nordnet": _NORDNET}, svc)
+        svc.get_account.assert_called_once_with("bud-2", "acc-1")
+
+    def test_unknown_slug_raises(self):
+        with self.assertRaises(ValueError):
+            last_resort_accounts(["typo"], {"nordnet": _NORDNET}, MagicMock())
+
+
+class TestRenderLastResort(unittest.TestCase):
+    def test_shows_balance_after_drop(self):
+        with patch("sys.stdout", new_callable=StringIO) as out:
+            render_last_resort([LastResort("Nordnet", 24_500.0)], market_drop=0.3)
+        self.assertIn("Nordnet 24 500  (17 150 after a 30% drop)", out.getvalue())
+
+    def test_prints_nothing_without_accounts(self):
+        with patch("sys.stdout", new_callable=StringIO) as out:
+            render_last_resort([], market_drop=0.3)
+        self.assertEqual(out.getvalue(), "")
+
+
 _CONFIG = BufferConfig(
     budget_id="bud-1",
     category="Emergency Fund",
@@ -219,6 +255,24 @@ class TestRunBuffer(unittest.TestCase):
         with patch("sys.stdout", new_callable=StringIO) as out:
             run_buffer(today=date(2026, 10, 16), budget_service_factory=lambda tok: self._service())
         self.assertIn("6.0 mo", out.getvalue())  # 3000 / (1500 - 1000)
+
+    @patch("ynab.buffer_estimate.read_tracking_accounts_config", return_value={"nordnet": _NORDNET})
+    @patch("ynab.buffer_estimate.read_credentials_file", return_value="tok")
+    @patch("ynab.buffer_estimate.read_buffer_config", return_value=_CONFIG._replace(last_resort=["nordnet"]))
+    def test_prints_last_resort(self, _cfg, _cred, _tracking):
+        svc = self._service()
+        svc.get_account.return_value = YnabAccount("acc-1", "Nordnet", 10_000_000)
+        with patch("sys.stdout", new_callable=StringIO) as out:
+            run_buffer(today=date(2026, 10, 16), budget_service_factory=lambda tok: svc)
+        self.assertIn("Last resort  Nordnet 10 000", out.getvalue())
+
+    @patch("ynab.buffer_estimate.read_tracking_accounts_config")
+    @patch("ynab.buffer_estimate.read_credentials_file", return_value="tok")
+    @patch("ynab.buffer_estimate.read_buffer_config", return_value=_CONFIG)
+    def test_skips_tracking_config_without_last_resort(self, _cfg, _cred, tracking):
+        with patch("sys.stdout", new_callable=StringIO):
+            run_buffer(today=date(2026, 10, 16), budget_service_factory=lambda tok: self._service())
+        tracking.assert_not_called()
 
     @patch("ynab.buffer_estimate.read_buffer_config", return_value=None)
     def test_exits_without_buffer_section(self, _cfg):

@@ -74,6 +74,8 @@ date_tolerance_days = 7
 # category       = "Emergency Fund"   # YNAB category whose balance is the buffer
 # history_months = 12                 # complete months to average spending over
 # floor_months   = 3                  # target is never below this many crisis months
+# last_resort    = ["nordnet"]        # tracking account slugs shown as a last resort
+# market_drop    = 0.3                # last-resort value shown after this market fall
 #
 # [buffer.keep]
 # "Savings"            = 0.0

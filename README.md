@@ -241,6 +241,7 @@ Emergency buffer — based on Nov 2025–Oct 2026
   unemployed      2 200      2 100   16 900    3.7 mo ⚠
 
   Target 16 900   Emergency Fund 10 000  ██████░░░░ 59%   (−6 900)
+  Last resort  Nordnet Investments 24 500  (17 150 after a 30% drop)
 ```
 
 Each category costs `max(avg spent, avg assigned)` over the last 12 complete
@@ -249,7 +250,10 @@ months, so sinking funds (gifts, vet, insurance) count even in quiet months.
 would pause, 1 for the mortgage. *Needed* is a full month of crisis spending per
 `income_delay_months` plus the shortfall for `months`; the *Target* is the largest
 scenario, never below `floor_months` (default 3) of crisis spending. ⚠ marks a
-scenario the fund cannot cover.
+scenario the fund cannot cover. *Last resort* lists the tracking accounts named in
+`last_resort` (e.g. `["nordnet"]`) — money you could sell, valued after a
+`market_drop` (default 30%) because crises and market falls tend to coincide. It
+is never counted toward the target.
 
 Configure it in a `[buffer]` section of `accounts.toml` (see the template from
 `ynab init`). `--months N` averages over a different window.

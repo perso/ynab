@@ -39,6 +39,7 @@ This is a Python tool that reads bank transaction exports (Finnish bank CSV form
 - `ynab buffer` — reads `[buffer]` from `accounts.toml`, fetches the last `history_months` complete months plus the current month for `budget_id`
 - `category_costs` computes `max(avg outflow, avg assigned)` per category, excluding the emergency category itself, Credit Card Payments and Internal Master Category; `keep` ratios (`"Group: Category"` beats `"Group"`, default 1.0) scale it to crisis cost
 - Per scenario: shortfall = `max(0, need − net_income)`, required = `need × income_delay_months + shortfall × months`; target = `max(required…, need × floor_months)`; runway uses the emergency category's current balance
+- `last_resort` lists `[tracking_accounts]` slugs whose balances (via `get_account`) are printed after a `market_drop` haircut; informational only, never counted toward the target
 
 **Tracking flow (`tracking` subcommand):**
 - `ynab tracking update` — interactive loop: fetches current balance for each tracking account, prompts user for new value, posts an adjustment transaction
