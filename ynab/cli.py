@@ -5,6 +5,7 @@ import logging
 from importlib.resources import files
 
 from ynab.budget_dashboard import run_status
+from ynab.buffer_estimate import run_buffer
 from ynab.spending_trends import run_trends
 from ynab.converter import _CONFIG_DIR, convert_bank_transactions
 from ynab.tracking_updater import run_tracking_set, run_tracking_update
@@ -68,6 +69,15 @@ def build_parser() -> argparse.ArgumentParser:
     trends.add_argument(
         "--top", "-n", type=int, default=5, metavar="N",
         help="number of categories to show per section (default: 5)",
+    )
+
+    buffer = subparsers.add_parser(
+        "buffer",
+        help="estimate how long the emergency fund lasts on reduced income",
+    )
+    buffer.add_argument(
+        "--months", "-m", type=int, metavar="N",
+        help="months of history to average spending over (default: history_months in config)",
     )
 
     tracking = subparsers.add_parser(
@@ -138,6 +148,8 @@ def run_app() -> None:
         )
     elif args.command == "trends":
         run_trends(top_n=args.top)
+    elif args.command == "buffer":
+        run_buffer(history_months=args.months)
     elif args.command == "tracking":
         if getattr(args, "tracking_command", None) == "update":
             run_tracking_update()

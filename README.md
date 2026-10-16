@@ -72,6 +72,7 @@ commands:
   init                      create ~/.config/ynab/ with directories and a starter accounts.toml
   upload [PATH]             convert bank CSVs and upload transactions to YNAB
   status [-g NAME]          show current month spending summary for all configured budgets
+  buffer [-m N]             estimate how long the emergency fund lasts on reduced income
   tracking update           interactively update all tracking account balances
   tracking set SLUG AMOUNT  set one tracking account to a specific balance
 
@@ -220,6 +221,39 @@ The command reads budget IDs from all entries in `accounts.toml` (regular and
 tracking accounts) and renders a table for each distinct budget found.
 Credentials must be configured (see **Authentication** below).
 
+## Emergency buffer
+
+`ynab buffer` answers "how long would my emergency fund last if I lost my job?"
+using your real spending:
+
+```
+Emergency buffer — based on Nov 2025–Oct 2026
+
+  Monthly            Normal   Crisis
+  Bills               2 340    2 340
+  Regular             2 250    1 870
+  Hobbies               450       90
+  Savings               500        0
+  Total               5 540    4 300
+
+  Scenario       Income  Shortfall   Needed    Runway
+  bench           3 300      1 000    6 000   10.0 mo
+  unemployed      2 200      2 100   16 900    3.7 mo ⚠
+
+  Target 16 900   Emergency Fund 10 000  ██████░░░░ 59%   (−6 900)
+```
+
+Each category costs `max(avg spent, avg assigned)` over the last 12 complete
+months, so sinking funds (gifts, vet, insurance) count even in quiet months.
+*Crisis* multiplies that by the category's `keep` ratio — 0 for investments you
+would pause, 1 for the mortgage. *Needed* is a full month of crisis spending per
+`income_delay_months` plus the shortfall for `months`; the *Target* is the largest
+scenario, never below `floor_months` (default 3) of crisis spending. ⚠ marks a
+scenario the fund cannot cover.
+
+Configure it in a `[buffer]` section of `accounts.toml` (see the template from
+`ynab init`). `--months N` averages over a different window.
+
 ## Authentication
 
 The tool uses a **personal access token**. Supply it in either of two ways:
@@ -241,6 +275,7 @@ removed but OAuth support is left as future work.
 | `ynab/cli.py` | Argument parsing (`build_parser`), `run_init`, `run_app` — CLI entry point |
 | `ynab/budget_service.py` | `BudgetService` protocol (interface for the YNAB API layer) |
 | `ynab/summary.py` | `AccountSummary` dataclass, `print_summary` — per-account upload summary table |
+| `ynab/buffer_estimate.py` | `category_costs`, `scenario_result`, `run_buffer` — emergency buffer estimate (`ynab buffer`) |
 | `ynab/tracking_updater.py` | `update_tracking_accounts`, `set_tracking_account` — tracking account balance management |
 | `ynab/bank/transaction.py` | `BankTransaction` NamedTuple and `TransactionStatus` enum |
 | `ynab/bank/transaction_reader.py` | Parses Finnish bank CSVs into `BankTransaction` lists |
