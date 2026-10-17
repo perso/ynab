@@ -6,6 +6,8 @@ from datetime import date
 from pathlib import Path
 from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
 
+import requests
+
 from ynab.budget_dashboard import _display_width, _ljust
 from ynab.spending_trends import _add_months
 from ynab.utilities.config_util import (
@@ -24,6 +26,7 @@ log = logging.getLogger(__name__)
 _CONFIG_DIR = Path.home() / ".config" / "ynab"
 _EXCLUDED_GROUPS = ("Internal Master Category", "Credit Card Payments")
 _BAR_WIDTH = 10
+_MAX_MONTHS_AHEAD = 12
 
 
 class CategoryCost(NamedTuple):
@@ -134,6 +137,40 @@ def emergency_balance(month: BudgetMonth, category: str) -> float:
     raise ValueError(f"Emergency category '{category}' not found in budget month {month.month}")
 
 
+def assigned_total(month: BudgetMonth) -> float:
+    """Euros assigned across all spending categories in *month*."""
+    return sum(
+        cat.budgeted
+        for cat in month.categories
+        if not (cat.hidden or cat.deleted or cat.category_group_name in _EXCLUDED_GROUPS)
+    ) / 1000.0
+
+
+def fetch_assigned_ahead(
+    service: YnabBudgetService,
+    budget_id: str,
+    today: date,
+    max_months: int = _MAX_MONTHS_AHEAD,
+) -> float:
+    """Sum money assigned to months after the current one.
+
+    Stops at the first month with nothing assigned, or one YNAB does not have yet (404).
+    """
+    total = 0.0
+    for i in range(1, max_months + 1):
+        try:
+            month = service.get_budget_month(budget_id, _add_months(today, i).isoformat())
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                break
+            raise
+        assigned = assigned_total(month)
+        if assigned == 0:
+            break
+        total += assigned
+    return total
+
+
 def last_resort_accounts(
     slugs: List[str],
     tracking: Dict[str, TrackingAccountConfig],
@@ -201,16 +238,21 @@ def render_buffer(
     category: str,
     balance: float,
     target: float,
+    ahead: float = 0.0,
 ) -> None:
-    """Print the buffer report to stdout."""
+    """Print the buffer report to stdout; *ahead* is money assigned to future months."""
+    buffer = balance + ahead
     print(f"\nEmergency buffer — based on {period}")
     _render_costs(costs)
-    _render_scenarios(results, balance)
-    fraction = balance / target if target else 1.0
-    gap = balance - target
+    _render_scenarios(results, buffer)
+    fraction = buffer / target if target else 1.0
+    gap = buffer - target
     sign = "+" if gap >= 0 else "−"
+    held = f"{category} {_eur(balance)}"
+    if ahead > 0:
+        held += f" + assigned ahead {_eur(ahead)} = {_eur(buffer)}"
     print(
-        f"\n  Target {_eur(target)}   {category} {_eur(balance)}  "
+        f"\n  Target {_eur(target)}   {held}  "
         f"{_bar(fraction)} {fraction:.0%}   ({sign}{_eur(abs(gap))})"
     )
 
@@ -238,7 +280,8 @@ def run_buffer(
     """Fetch budget history and print how long the emergency fund would last.
 
     Uses the last *history_months* complete months (default from config) and
-    the current month's balance of the configured emergency category.
+    the current month's balance of the configured emergency category plus
+    money already assigned to future months.
     """
     config_path = _CONFIG_DIR / "accounts.toml"
     config: Optional[BufferConfig] = read_buffer_config(config_path)
@@ -253,13 +296,15 @@ def run_buffer(
     service = budget_service_factory(read_credentials_file())
     history = [service.get_budget_month(config.budget_id, m) for m in month_strs]
     balance = emergency_balance(service.get_budget_month(config.budget_id), config.category)
+    ahead = fetch_assigned_ahead(service, config.budget_id, today)
 
     costs = category_costs(history, config.keep, config.category)
     need = sum(c.crisis_cost for c in costs)
-    results = [scenario_result(need, s, balance) for s in config.scenarios]
+    results = [scenario_result(need, s, balance + ahead) for s in config.scenarios]
     target = buffer_target(need, results, config.floor_months)
     tracking = read_tracking_accounts_config(config_path) if config.last_resort else {}
     accounts = last_resort_accounts(config.last_resort, tracking, service)
 
-    render_buffer(_period_label(month_strs), costs, results, config.category, balance, target)
+    period = _period_label(month_strs)
+    render_buffer(period, costs, results, config.category, balance, target, ahead)
     render_last_resort(accounts, config.market_drop)
