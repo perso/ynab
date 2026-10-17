@@ -4,6 +4,8 @@ from datetime import date
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from ynab.buffer_estimate import (
     CategoryCost,
     LastResort,
@@ -11,9 +13,11 @@ from ynab.buffer_estimate import (
     _bar,
     _eur,
     _period_label,
+    assigned_total,
     buffer_target,
     category_costs,
     emergency_balance,
+    fetch_assigned_ahead,
     last_resort_accounts,
     render_buffer,
     render_last_resort,
@@ -176,9 +180,79 @@ class TestRenderBuffer(unittest.TestCase):
         output = self._render(9000, [ScenarioResult("bench", 3300, 0, 0, math.inf)])
         self.assertIn("∞", output)
 
+    def test_hides_ahead_when_nothing_assigned(self):
+        output = self._render(4500, [ScenarioResult("bench", 3300, 0, 0, math.inf)])
+        self.assertNotIn("assigned ahead", output)
+
+    def test_shows_ahead_and_combined_buffer(self):
+        costs = [CategoryCost("Mortgage", "Bills", 1450.0, 1.0)]
+        results = [ScenarioResult("bench", 3300, 0, 0, math.inf)]
+        with patch("sys.stdout", new_callable=StringIO) as out:
+            render_buffer("Nov 2025–Oct 2026", costs, results, "Emergency Fund", 3000, 9000, ahead=1500)
+        self.assertIn("Emergency Fund 3 000 + assigned ahead 1 500 = 4 500", out.getvalue())
+        self.assertIn("50%", out.getvalue())
+
     def test_shows_funding_percentage(self):
         output = self._render(4500, [ScenarioResult("bench", 3300, 0, 0, math.inf)])
         self.assertIn("50%", output)
+
+
+class TestAssignedTotal(unittest.TestCase):
+    def test_sums_budgeted_in_euros(self):
+        month = _month(_cat("Mortgage", "Bills", budgeted=1_450_000), _cat("Water", "Bills", budgeted=50_000))
+        self.assertEqual(assigned_total(month), 1500.0)
+
+    def test_skips_excluded_hidden_and_deleted(self):
+        month = _month(
+            _cat("Visa", "Credit Card Payments", budgeted=100_000),
+            _cat("Inflow: Ready to Assign", "Internal Master Category", budgeted=100_000),
+            _cat("Old", "Bills", budgeted=100_000, hidden=True),
+            _cat("Gone", "Bills", budgeted=100_000, deleted=True),
+        )
+        self.assertEqual(assigned_total(month), 0.0)
+
+    def test_negative_assignment_reduces_total(self):
+        month = _month(_cat("Mortgage", "Bills", budgeted=500_000), _cat("Fun", "QoL", budgeted=-100_000))
+        self.assertEqual(assigned_total(month), 400.0)
+
+
+def _not_found():
+    response = MagicMock(status_code=404)
+    return requests.HTTPError(response=response)
+
+
+class TestFetchAssignedAhead(unittest.TestCase):
+    def _service(self, *months):
+        svc = MagicMock()
+        svc.get_budget_month.side_effect = list(months)
+        return svc
+
+    def test_sums_until_empty_month(self):
+        svc = self._service(
+            _month(_cat("Mortgage", "Bills", budgeted=1_000_000)),
+            _month(_cat("Mortgage", "Bills", budgeted=500_000)),
+            _month(),
+        )
+        self.assertEqual(fetch_assigned_ahead(svc, "bud-1", date(2026, 10, 17)), 1500.0)
+
+    def test_starts_from_next_month(self):
+        svc = self._service(_month())
+        fetch_assigned_ahead(svc, "bud-1", date(2026, 12, 17))
+        svc.get_budget_month.assert_called_once_with("bud-1", "2027-01-01")
+
+    def test_stops_at_cap(self):
+        svc = MagicMock()
+        svc.get_budget_month.return_value = _month(_cat("Mortgage", "Bills", budgeted=1_000_000))
+        self.assertEqual(fetch_assigned_ahead(svc, "bud-1", date(2026, 10, 17), max_months=3), 3000.0)
+
+    def test_stops_on_missing_month(self):
+        svc = self._service(_month(_cat("Mortgage", "Bills", budgeted=1_000_000)), _not_found())
+        self.assertEqual(fetch_assigned_ahead(svc, "bud-1", date(2026, 10, 17)), 1000.0)
+
+    def test_other_http_errors_propagate(self):
+        svc = self._service(requests.HTTPError(response=MagicMock(status_code=500)))
+        with self.assertRaises(requests.HTTPError):
+            fetch_assigned_ahead(svc, "bud-1", date(2026, 10, 17))
 
 
 _NORDNET = TrackingAccountConfig("Nordnet", "bud-2", "acc-1")
@@ -239,7 +313,7 @@ class TestRunBuffer(unittest.TestCase):
         with patch("sys.stdout", new_callable=StringIO):
             run_buffer(today=date(2026, 10, 16), budget_service_factory=lambda tok: svc)
         months = [c.args[1] if len(c.args) > 1 else "current" for c in svc.get_budget_month.call_args_list]
-        self.assertEqual(months, ["2026-09-01", "2026-08-01", "current"])
+        self.assertEqual(months, ["2026-09-01", "2026-08-01", "current", "2026-11-01"])
 
     @patch("ynab.buffer_estimate.read_credentials_file", return_value="tok")
     @patch("ynab.buffer_estimate.read_buffer_config", return_value=_CONFIG)
@@ -247,7 +321,7 @@ class TestRunBuffer(unittest.TestCase):
         svc = self._service()
         with patch("sys.stdout", new_callable=StringIO):
             run_buffer(history_months=4, today=date(2026, 10, 16), budget_service_factory=lambda tok: svc)
-        self.assertEqual(svc.get_budget_month.call_count, 5)
+        self.assertEqual(svc.get_budget_month.call_count, 6)  # 4 history + current + 1 ahead
 
     @patch("ynab.buffer_estimate.read_credentials_file", return_value="tok")
     @patch("ynab.buffer_estimate.read_buffer_config", return_value=_CONFIG)
@@ -273,6 +347,25 @@ class TestRunBuffer(unittest.TestCase):
         with patch("sys.stdout", new_callable=StringIO):
             run_buffer(today=date(2026, 10, 16), budget_service_factory=lambda tok: self._service())
         tracking.assert_not_called()
+
+    @patch("ynab.buffer_estimate.read_credentials_file", return_value="tok")
+    @patch("ynab.buffer_estimate.read_buffer_config", return_value=_CONFIG)
+    def test_runway_includes_assigned_ahead(self, _cfg, _cred):
+        def month(budget_id, month="current"):
+            if month == "2026-11-01":
+                return _month(_cat("Mortgage", "Bills", budgeted=1_500_000))
+            if month == "2026-12-01":
+                return _month()
+            return _month(
+                _cat("Mortgage", "Bills", activity=-1_500_000),
+                _cat("Emergency Fund", "Savings", balance=3_000_000),
+            )
+
+        svc = MagicMock()
+        svc.get_budget_month.side_effect = month
+        with patch("sys.stdout", new_callable=StringIO) as out:
+            run_buffer(today=date(2026, 10, 16), budget_service_factory=lambda tok: svc)
+        self.assertIn("9.0 mo", out.getvalue())  # (3000 + 1500) / (1500 - 1000)
 
     @patch("ynab.buffer_estimate.read_buffer_config", return_value=None)
     def test_exits_without_buffer_section(self, _cfg):

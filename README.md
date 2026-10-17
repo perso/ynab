@@ -237,10 +237,10 @@ Emergency buffer — based on Nov 2025–Oct 2026
   Total               5 540    4 300
 
   Scenario       Income  Shortfall   Needed    Runway
-  bench           3 300      1 000    6 000   10.0 mo
-  unemployed      2 200      2 100   16 900    3.7 mo ⚠
+  bench           3 300      1 000    6 000   13.2 mo
+  unemployed      2 200      2 100   16 900    5.2 mo ⚠
 
-  Target 16 900   Emergency Fund 10 000  ██████░░░░ 59%   (−6 900)
+  Target 16 900   Emergency Fund 10 000 + assigned ahead 3 200 = 13 200  ████████░░ 78%   (−3 700)
   Last resort  Nordnet Investments 24 500  (17 150 after a 30% drop)
 ```
 
@@ -250,7 +250,8 @@ months, so sinking funds (gifts, vet, insurance) count even in quiet months.
 would pause, 1 for the mortgage. *Needed* is a full month of crisis spending per
 `income_delay_months` plus the shortfall for `months`; the *Target* is the largest
 scenario, never below `floor_months` (default 3) of crisis spending. ⚠ marks a
-scenario the fund cannot cover. *Last resort* lists the tracking accounts named in
+scenario the fund cannot cover. Money already assigned to future months counts
+toward the buffer too — it is cash you hold for bills that have not arrived yet. *Last resort* lists the tracking accounts named in
 `last_resort` (e.g. `["nordnet"]`) — money you could sell, valued after a
 `market_drop` (default 30%) because crises and market falls tend to coincide. It
 is never counted toward the target.
